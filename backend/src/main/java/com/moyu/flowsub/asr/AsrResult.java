@@ -1,7 +1,7 @@
 package com.moyu.flowsub.asr;
 
 /**
- * ASR Provider 的统一识别结果。第二阶段先输出英文原文字幕，中文翻译后续阶段接入。
+ * ASR Provider 的统一识别结果。FINAL 结果会进入翻译链路，PARTIAL 结果只做临时展示。
  */
 public record AsrResult(
         String segmentId,
