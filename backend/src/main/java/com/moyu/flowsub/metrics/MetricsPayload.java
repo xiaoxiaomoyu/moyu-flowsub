@@ -8,6 +8,16 @@ public record MetricsPayload(
         long translateLatencyMs,
         long totalLatencyMs,
         int subtitleCount,
-        int correctionCount
+        int correctionCount,
+        int audioChunkCount,
+        String providerName,
+        boolean providerFallback
 ) {
+    public MetricsPayload(long asrLatencyMs,
+                          long translateLatencyMs,
+                          long totalLatencyMs,
+                          int subtitleCount,
+                          int correctionCount) {
+        this(asrLatencyMs, translateLatencyMs, totalLatencyMs, subtitleCount, correctionCount, 0, "Mock ASR", true);
+    }
 }

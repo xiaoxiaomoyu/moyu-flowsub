@@ -2,6 +2,11 @@ package com.moyu.flowsub.websocket;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moyu.flowsub.asr.AsrProviderStatusPayload;
+import com.moyu.flowsub.asr.AsrResult;
+import com.moyu.flowsub.audio.AudioChunkMeta;
+import com.moyu.flowsub.audio.AudioStreamProcessResult;
+import com.moyu.flowsub.audio.AudioStreamService;
 import com.moyu.flowsub.metrics.MetricsPayload;
 import com.moyu.flowsub.mock.MockSubtitle;
 import com.moyu.flowsub.mock.MockSubtitleProvider;
@@ -9,6 +14,7 @@ import com.moyu.flowsub.session.SessionService;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -28,16 +34,21 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final SessionService sessionService;
     private final MockSubtitleProvider mockSubtitleProvider;
+    private final AudioStreamService audioStreamService;
     private final ExecutorService executorService = Executors.newCachedThreadPool();
     // 用 WebSocket 会话编号标记推送状态，避免用户重复点击“开始模拟同传”导致多条任务并发推送。
     private final Map<String, AtomicBoolean> runningSessions = new java.util.concurrent.ConcurrentHashMap<>();
+    // 每个音频二进制帧到达前，前端会先发一条元数据文本消息，这里按 WebSocket 会话暂存。
+    private final Map<String, AudioChunkMeta> pendingAudioMetas = new java.util.concurrent.ConcurrentHashMap<>();
 
     public TranslateWebSocketHandler(ObjectMapper objectMapper,
                                      SessionService sessionService,
-                                     MockSubtitleProvider mockSubtitleProvider) {
+                                     MockSubtitleProvider mockSubtitleProvider,
+                                     AudioStreamService audioStreamService) {
         this.objectMapper = objectMapper;
         this.sessionService = sessionService;
         this.mockSubtitleProvider = mockSubtitleProvider;
+        this.audioStreamService = audioStreamService;
     }
 
     @Override
@@ -56,6 +67,48 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
             // 第一阶段只识别开始模拟同传指令，真实音频块会在后续阶段扩展。
             startMockTranslate(session);
         }
+        if ("START_AUDIO_STREAM".equals(type)) {
+            startAudioStream(session, root.path("payload"));
+        }
+        if ("AUDIO_CHUNK_META".equals(type)) {
+            pendingAudioMetas.put(session.getId(), objectMapper.treeToValue(root.path("payload"), AudioChunkMeta.class));
+        }
+        if ("STOP_AUDIO_STREAM".equals(type)) {
+            stopAudioStream(session);
+        }
+    }
+
+    @Override
+    protected void handleBinaryMessage(WebSocketSession session, BinaryMessage message) {
+        AudioChunkMeta meta = pendingAudioMetas.remove(session.getId());
+        if (meta == null) {
+            return;
+        }
+
+        String sessionId = extractSessionId(session);
+        byte[] data = new byte[message.getPayloadLength()];
+        message.getPayload().get(data);
+        AudioStreamProcessResult result = audioStreamService.accept(sessionId, meta, data);
+
+        sendQuietly(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, result.providerStatus()));
+        AsrResult asrResult = result.asrResult();
+        if (asrResult != null) {
+            String eventType = "FINAL".equals(asrResult.status()) ? "ASR_FINAL" : "ASR_PARTIAL";
+            SubtitlePayload payload = new SubtitlePayload(
+                    asrResult.segmentId(),
+                    asrResult.text(),
+                    "中文翻译将在第三阶段接入",
+                    asrResult.status(),
+                    1,
+                    false,
+                    asrResult.latencyMs()
+            );
+            sendQuietly(session, WsMessage.of(eventType, sessionId, payload));
+            sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
+                    new MetricsPayload(asrResult.latencyMs(), 0, asrResult.latencyMs(),
+                            result.subtitleCount(), 0, result.chunkCount(),
+                            result.providerStatus().provider(), result.providerStatus().fallback())));
+        }
     }
 
     @Override
@@ -64,6 +117,22 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
         if (running != null) {
             running.set(false);
         }
+        pendingAudioMetas.remove(session.getId());
+        audioStreamService.stop(extractSessionId(session));
+    }
+
+    private void startAudioStream(WebSocketSession session, JsonNode payload) throws IOException {
+        String sessionId = extractSessionId(session);
+        AudioChunkMeta meta = payload == null || payload.isMissingNode()
+                ? new AudioChunkMeta(0, System.currentTimeMillis(), "pcm_s16le", 16000, 1, 0)
+                : objectMapper.treeToValue(payload, AudioChunkMeta.class);
+        send(session, WsMessage.of("AUDIO_STREAM_STARTED", sessionId, audioStreamService.start(sessionId, meta)));
+        send(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, audioStreamService.providerStatus()));
+    }
+
+    private void stopAudioStream(WebSocketSession session) throws IOException {
+        String sessionId = extractSessionId(session);
+        send(session, WsMessage.of("AUDIO_STREAM_STOPPED", sessionId, audioStreamService.stop(sessionId)));
     }
 
     private void startMockTranslate(WebSocketSession session) {
