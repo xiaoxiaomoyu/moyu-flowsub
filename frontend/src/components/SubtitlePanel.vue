@@ -13,7 +13,7 @@ const subtitleStore = useSubtitleStore()
 
     <div v-if="subtitleStore.subtitles.length === 0" class="empty-state">
       <strong>等待字幕流</strong>
-      <p>创建会话并点击开始模拟同传后，字幕会按秒推送到这里。</p>
+      <p>创建会话并开始麦克风采集后，英文识别字幕会实时推送到这里。</p>
     </div>
 
     <div v-else class="subtitle-list">

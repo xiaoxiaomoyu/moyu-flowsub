@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
 import { CircleCheck, Link, SwitchButton, VideoPlay } from '@element-plus/icons-vue'
 import { useSessionStore } from '../stores/sessionStore'
 
@@ -22,11 +22,28 @@ const connectionLabels: Record<string, string> = {
 const eventLabels: Record<string, string> = {
   SESSION_CONNECTED: '会话已连接',
   START_MOCK_TRANSLATE: '已开始模拟同传',
+  START_AUDIO_STREAM: '已开始音频采集',
+  STOP_AUDIO_STREAM: '已停止音频采集',
+  AUDIO_STREAM_STARTED: '音频流已启动',
+  AUDIO_STREAM_STOPPED: '音频流已停止',
+  ASR_PARTIAL: '收到临时识别',
+  ASR_FINAL: '收到稳定识别',
+  ASR_PROVIDER_STATUS: 'ASR 状态更新',
   SUBTITLE_UPDATE: '收到字幕更新',
   SUBTITLE_CORRECTION: '收到字幕修正',
   METRICS_UPDATE: '收到指标更新',
   SESSION_FINISHED: '会话已结束'
 }
+
+const permissionLabels: Record<string, string> = {
+  IDLE: '未请求',
+  REQUESTING: '请求中',
+  GRANTED: '已授权',
+  DENIED: '已拒绝',
+  ERROR: '异常'
+}
+
+const levelPercent = computed(() => Math.min(100, Math.round(sessionStore.audioCapture.level * 180)))
 
 function connectionText(status: string) {
   return connectionLabels[status] ?? status
@@ -86,9 +103,25 @@ function eventText(type: string) {
         type="success"
         :icon="VideoPlay"
         :disabled="sessionStore.connectionStatus !== 'CONNECTED'"
+        v-if="!sessionStore.audioCapture.running"
+        @click="sessionStore.startAudioCapture"
+      >
+        开始麦克风采集
+      </el-button>
+      <el-button
+        type="warning"
+        :icon="SwitchButton"
+        v-else
+        @click="sessionStore.stopAudioCapture"
+      >
+        停止麦克风采集
+      </el-button>
+      <el-button
+        :icon="VideoPlay"
+        :disabled="sessionStore.connectionStatus !== 'CONNECTED' || sessionStore.audioCapture.running"
         @click="sessionStore.startMockTranslate"
       >
-        开始模拟同传
+        模拟同传兜底
       </el-button>
       <el-button
         :icon="SwitchButton"
@@ -114,6 +147,34 @@ function eventText(type: string) {
         <span>最近事件</span>
         <strong>{{ sessionStore.lastEvent ? eventText(sessionStore.lastEvent) : '等待操作' }}</strong>
       </div>
+      <div>
+        <span>麦克风权限</span>
+        <strong>{{ permissionLabels[sessionStore.audioCapture.permissionStatus] }}</strong>
+      </div>
+      <div>
+        <span>采样率</span>
+        <strong>{{ sessionStore.audioCapture.sampleRate || '-' }}Hz</strong>
+      </div>
+      <div>
+        <span>音频块</span>
+        <strong>{{ sessionStore.audioCapture.chunkCount }}</strong>
+      </div>
+      <div>
+        <span>ASR Provider</span>
+        <strong>{{ sessionStore.asrProviderStatus.provider }}</strong>
+      </div>
+    </div>
+
+    <div class="audio-meter" v-if="sessionStore.currentSession">
+      <div class="meter-row">
+        <span>输入电平</span>
+        <strong>{{ levelPercent }}%</strong>
+      </div>
+      <el-progress :percentage="levelPercent" :show-text="false" />
+      <p>{{ sessionStore.asrProviderStatus.message }}</p>
+      <p v-if="sessionStore.audioCapture.errorMessage" class="error-text">
+        {{ sessionStore.audioCapture.errorMessage }}
+      </p>
     </div>
 
     <el-alert
@@ -124,7 +185,7 @@ function eventText(type: string) {
       title="创建会话后会自动建立 WebSocket 连接"
     >
       <template #default>
-        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 当前阶段使用模拟字幕流，不采集真实音频。</div>
+        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 第二阶段默认使用麦克风真实采集，模拟同传作为兜底演示。</div>
       </template>
     </el-alert>
   </section>
