@@ -91,13 +91,12 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
         AudioStreamProcessResult result = audioStreamService.accept(sessionId, meta, data);
 
         sendQuietly(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, result.providerStatus()));
-        AsrResult asrResult = result.asrResult();
-        if (asrResult != null) {
+        for (AsrResult asrResult : result.asrResults()) {
             String eventType = "FINAL".equals(asrResult.status()) ? "ASR_FINAL" : "ASR_PARTIAL";
             SubtitlePayload payload = new SubtitlePayload(
                     asrResult.segmentId(),
                     asrResult.text(),
-                    "中文翻译将在第三阶段接入",
+                    "中文翻译将在后续阶段接入",
                     asrResult.status(),
                     1,
                     false,
@@ -127,7 +126,7 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
                 ? new AudioChunkMeta(0, System.currentTimeMillis(), "pcm_s16le", 16000, 1, 0)
                 : objectMapper.treeToValue(payload, AudioChunkMeta.class);
         send(session, WsMessage.of("AUDIO_STREAM_STARTED", sessionId, audioStreamService.start(sessionId, meta)));
-        send(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, audioStreamService.providerStatus()));
+        send(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, audioStreamService.providerStatus(sessionId)));
     }
 
     private void stopAudioStream(WebSocketSession session) throws IOException {

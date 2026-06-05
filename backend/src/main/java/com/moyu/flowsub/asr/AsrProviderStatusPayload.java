@@ -7,6 +7,12 @@ public record AsrProviderStatusPayload(
         String provider,
         boolean available,
         boolean fallback,
-        String message
+        String message,
+        boolean connected,
+        String reason,
+        String endpointType
 ) {
+    public AsrProviderStatusPayload(String provider, boolean available, boolean fallback, String message) {
+        this(provider, available, fallback, message, available, message, "UNKNOWN");
+    }
 }

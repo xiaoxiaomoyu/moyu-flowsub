@@ -11,11 +11,17 @@ qiniu:
   secret-key: ${QINIU_SECRET_KEY:}
   bucket: ${QINIU_BUCKET:}
   domain: ${QINIU_DOMAIN:}
+  ai:
+    asr-enabled: ${QINIU_ASR_ENABLED:false}
+    api-key: ${QINIU_AI_API_KEY:}
+    asr-ws-url: ${QINIU_ASR_WS_URL:wss://openai.qiniu.com/v1/voice/asr}
 
 moyu:
   flowsub:
     mock-enabled: true
     asr:
       mock-enabled: ${ASR_MOCK_ENABLED:true}
+      funasr-enabled: ${FUNASR_ENABLED:true}
       funasr-endpoint: ${FUNASR_ENDPOINT:}
-      chunk-duration-ms: ${AUDIO_CHUNK_DURATION_MS:750}
+      funasr-ws-endpoint: ${FUNASR_WS_ENDPOINT:${FUNASR_ENDPOINT:}}
+      chunk-duration-ms: ${AUDIO_CHUNK_DURATION_MS:300}

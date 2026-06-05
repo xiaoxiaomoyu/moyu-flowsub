@@ -1,11 +1,11 @@
 package com.moyu.flowsub.asr;
 
 import com.moyu.flowsub.audio.AudioChunk;
+import com.moyu.flowsub.audio.AudioChunkMeta;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class AsrService {
@@ -18,14 +18,21 @@ public class AsrService {
                 .toList();
     }
 
-    public Optional<AsrResult> recognize(AudioChunk chunk) {
+    public AsrStreamSession start(String sessionId, AudioChunkMeta meta) {
+        StringBuilder fallbackReasons = new StringBuilder();
         for (AsrProvider provider : providers) {
-            Optional<AsrResult> result = provider.recognize(chunk);
-            if (result.isPresent()) {
-                return result;
+            AsrProviderStatusPayload status = provider.status();
+            if (!status.available()) {
+                appendReason(fallbackReasons, status.provider(), status.reason());
+                continue;
+            }
+            try {
+                return provider.start(sessionId, meta);
+            } catch (Exception e) {
+                appendReason(fallbackReasons, status.provider(), e.getMessage());
             }
         }
-        return Optional.empty();
+        return new EmptyAsrStreamSession(fallbackReasons.toString());
     }
 
     public AsrProviderStatusPayload currentStatus() {
@@ -35,19 +42,38 @@ public class AsrService {
                 return status;
             }
         }
-        return providers.stream()
-                .map(AsrProvider::status)
-                .filter(AsrProviderStatusPayload::available)
-                .findFirst()
-                .orElse(new AsrProviderStatusPayload("未启用", false, true, "没有可用的 ASR Provider。"));
+        return new AsrProviderStatusPayload("未启用", false, true, "没有可用的 ASR Provider。",
+                false, "请配置七牛云 AI API Key、FunASR 地址或启用 Mock ASR。", "NONE");
     }
 
-    public AsrProviderStatusPayload selectedProviderStatus() {
-        // 当前真实可产出字幕的是 Provider 链中第一个返回结果的实现；默认 Mock 作为第二阶段兜底。
-        return providers.stream()
-                .filter(provider -> provider instanceof MockAsrProvider)
-                .findFirst()
-                .map(AsrProvider::status)
-                .orElseGet(this::currentStatus);
+    private void appendReason(StringBuilder builder, String provider, String reason) {
+        if (!builder.isEmpty()) {
+            builder.append("；");
+        }
+        builder.append(provider).append("：").append(reason == null ? "不可用" : reason);
+    }
+
+    private static class EmptyAsrStreamSession implements AsrStreamSession {
+        private final String reason;
+
+        private EmptyAsrStreamSession(String reason) {
+            this.reason = reason;
+        }
+
+        @Override
+        public AsrProviderStatusPayload status() {
+            return new AsrProviderStatusPayload("未启用", false, true, "没有可用的 ASR Provider。",
+                    false, reason, "NONE");
+        }
+
+        @Override
+        public List<AsrResult> accept(AudioChunk chunk) {
+            return List.of();
+        }
+
+        @Override
+        public void close() {
+            // 空会话没有外部连接。
+        }
     }
 }

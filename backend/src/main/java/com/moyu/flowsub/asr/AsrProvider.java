@@ -1,11 +1,10 @@
 package com.moyu.flowsub.asr;
 
 import com.moyu.flowsub.audio.AudioChunk;
-
-import java.util.Optional;
+import com.moyu.flowsub.audio.AudioChunkMeta;
 
 /**
- * ASR 统一适配接口，后续可把七牛云智能语音、FunASR 或其他识别服务挂到同一条链路上。
+ * ASR 统一适配接口。第三阶段开始按“会话级流式连接”管理真实识别服务。
  */
 public interface AsrProvider {
 
@@ -15,5 +14,5 @@ public interface AsrProvider {
 
     AsrProviderStatusPayload status();
 
-    Optional<AsrResult> recognize(AudioChunk chunk);
+    AsrStreamSession start(String sessionId, AudioChunkMeta meta) throws Exception;
 }
