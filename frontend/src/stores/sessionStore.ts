@@ -19,7 +19,10 @@ const emptyProviderStatus: AsrProviderStatus = {
   provider: '等待接入',
   available: false,
   fallback: false,
-  message: '创建会话并开始采集后显示 ASR Provider 状态。'
+  message: '创建会话并开始采集后显示 ASR Provider 状态。',
+  connected: false,
+  reason: '等待创建会话。',
+  endpointType: 'NONE'
 }
 
 export const useSessionStore = defineStore('session', {
@@ -83,7 +86,8 @@ export const useSessionStore = defineStore('session', {
           (meta, data) => wsClient.sendAudioChunk(meta, data),
           (state) => {
             this.audioCapture = state
-          }
+          },
+          Number(import.meta.env.VITE_AUDIO_CHUNK_DURATION_MS || 300)
         )
       } catch {
         wsClient.sendStopAudioStream()

@@ -37,7 +37,7 @@ class AudioCapture {
   private state: AudioCaptureState = { ...initialState }
   private onState: StateHandler | null = null
 
-  async start(onChunk: ChunkHandler, onState: StateHandler, chunkDurationMs = 750) {
+  async start(onChunk: ChunkHandler, onState: StateHandler, chunkDurationMs = 300) {
     if (this.state.running) {
       return
     }

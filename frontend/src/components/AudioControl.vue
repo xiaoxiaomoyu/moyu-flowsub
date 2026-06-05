@@ -163,6 +163,10 @@ function eventText(type: string) {
         <span>ASR Provider</span>
         <strong>{{ sessionStore.asrProviderStatus.provider }}</strong>
       </div>
+      <div>
+        <span>识别连接</span>
+        <strong>{{ sessionStore.asrProviderStatus.connected ? '已连接' : '未连接' }}</strong>
+      </div>
     </div>
 
     <div class="audio-meter" v-if="sessionStore.currentSession">
@@ -172,6 +176,9 @@ function eventText(type: string) {
       </div>
       <el-progress :percentage="levelPercent" :show-text="false" />
       <p>{{ sessionStore.asrProviderStatus.message }}</p>
+      <p v-if="sessionStore.asrProviderStatus.reason">
+        {{ sessionStore.asrProviderStatus.reason }}
+      </p>
       <p v-if="sessionStore.audioCapture.errorMessage" class="error-text">
         {{ sessionStore.audioCapture.errorMessage }}
       </p>
@@ -185,7 +192,7 @@ function eventText(type: string) {
       title="创建会话后会自动建立 WebSocket 连接"
     >
       <template #default>
-        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 第二阶段默认使用麦克风真实采集，模拟同传作为兜底演示。</div>
+        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 第三阶段优先使用七牛云真实识别，FunASR 和 Mock 作为兜底。</div>
       </template>
     </el-alert>
   </section>
