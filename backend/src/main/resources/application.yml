@@ -25,3 +25,9 @@ moyu:
       funasr-endpoint: ${FUNASR_ENDPOINT:}
       funasr-ws-endpoint: ${FUNASR_WS_ENDPOINT:${FUNASR_ENDPOINT:}}
       chunk-duration-ms: ${AUDIO_CHUNK_DURATION_MS:300}
+    deepseek:
+      enabled: ${DEEPSEEK_ENABLED:false}
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com/v1}
+      model: ${DEEPSEEK_MODEL:deepseek-v4-pro}
+      timeout-ms: ${DEEPSEEK_TIMEOUT_MS:12000}
