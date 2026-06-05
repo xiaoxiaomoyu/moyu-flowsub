@@ -66,6 +66,9 @@ export interface AsrProviderStatus {
   available: boolean
   fallback: boolean
   message: string
+  connected: boolean
+  reason: string
+  endpointType: string
 }
 
 export interface AudioStreamStarted {
