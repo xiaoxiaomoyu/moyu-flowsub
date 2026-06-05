@@ -56,6 +56,28 @@ export interface Metrics {
   totalLatencyMs: number
   subtitleCount: number
   correctionCount: number
+  audioChunkCount: number
+  providerName: string
+  providerFallback: boolean
+}
+
+export interface AsrProviderStatus {
+  provider: string
+  available: boolean
+  fallback: boolean
+  message: string
+}
+
+export interface AudioStreamStarted {
+  input: string
+  format: string
+  sampleRate: number
+  chunkDurationMs: number
+}
+
+export interface AudioStreamStopped {
+  chunkCount: number
+  subtitleCount: number
 }
 
 export interface WsMessage<T = unknown> {

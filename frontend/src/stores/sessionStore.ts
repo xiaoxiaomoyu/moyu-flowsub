@@ -1,9 +1,26 @@
 import { defineStore } from 'pinia'
 import { createSession, finishSession, listSessions } from '../api/sessionApi'
-import type { CreateSessionRequest, FlowSession, Metrics, SubtitleCorrection, SubtitleSegment, WsMessage } from '../types'
+import type { AsrProviderStatus, CreateSessionRequest, FlowSession, Metrics, SubtitleCorrection, SubtitleSegment, WsMessage } from '../types'
+import { audioCapture, type AudioCaptureState } from '../utils/audioCapture'
 import { wsClient } from '../utils/wsClient'
 import { useMetricsStore } from './metricsStore'
 import { useSubtitleStore } from './subtitleStore'
+
+const emptyAudioState: AudioCaptureState = {
+  running: false,
+  permissionStatus: 'IDLE',
+  sampleRate: 0,
+  level: 0,
+  chunkCount: 0,
+  errorMessage: ''
+}
+
+const emptyProviderStatus: AsrProviderStatus = {
+  provider: '等待接入',
+  available: false,
+  fallback: false,
+  message: '创建会话并开始采集后显示 ASR Provider 状态。'
+}
 
 export const useSessionStore = defineStore('session', {
   state: () => ({
@@ -11,7 +28,9 @@ export const useSessionStore = defineStore('session', {
     sessions: [] as FlowSession[],
     connectionStatus: 'DISCONNECTED' as 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR',
     loading: false,
-    lastEvent: ''
+    lastEvent: '',
+    audioCapture: { ...emptyAudioState },
+    asrProviderStatus: { ...emptyProviderStatus }
   }),
   actions: {
     async create(payload: CreateSessionRequest) {
@@ -22,6 +41,8 @@ export const useSessionStore = defineStore('session', {
         // 创建新会话时清空上一轮演示数据，保证验收流程干净。
         subtitleStore.reset()
         metricsStore.reset()
+        this.audioCapture = { ...emptyAudioState }
+        this.asrProviderStatus = { ...emptyProviderStatus }
         this.currentSession = await createSession(payload)
         this.connectCurrentSession()
       } finally {
@@ -51,10 +72,37 @@ export const useSessionStore = defineStore('session', {
       wsClient.sendStartMockTranslate(this.currentSession.title)
       this.lastEvent = 'START_MOCK_TRANSLATE'
     },
+    async startAudioCapture() {
+      if (!this.currentSession || this.connectionStatus !== 'CONNECTED') {
+        return
+      }
+      wsClient.sendStartAudioStream()
+      this.lastEvent = 'START_AUDIO_STREAM'
+      try {
+        await audioCapture.start(
+          (meta, data) => wsClient.sendAudioChunk(meta, data),
+          (state) => {
+            this.audioCapture = state
+          }
+        )
+      } catch {
+        wsClient.sendStopAudioStream()
+        this.lastEvent = 'STOP_AUDIO_STREAM'
+      }
+    },
+    stopAudioCapture() {
+      if (this.audioCapture.running) {
+        wsClient.sendStopAudioStream()
+      }
+      audioCapture.stop()
+      this.audioCapture = audioCapture.snapshot()
+      this.lastEvent = 'STOP_AUDIO_STREAM'
+    },
     async finish() {
       if (!this.currentSession) {
         return
       }
+      this.stopAudioCapture()
       this.currentSession = await finishSession(this.currentSession.sessionId)
       wsClient.disconnect()
       this.connectionStatus = 'DISCONNECTED'
@@ -72,8 +120,14 @@ export const useSessionStore = defineStore('session', {
       if (message.type === 'SUBTITLE_UPDATE') {
         subtitleStore.addSubtitle(message.payload as SubtitleSegment)
       }
+      if (message.type === 'ASR_PARTIAL' || message.type === 'ASR_FINAL') {
+        subtitleStore.addSubtitle(message.payload as SubtitleSegment)
+      }
       if (message.type === 'SUBTITLE_CORRECTION') {
         subtitleStore.applyCorrection(message.payload as SubtitleCorrection)
+      }
+      if (message.type === 'ASR_PROVIDER_STATUS') {
+        this.asrProviderStatus = message.payload as AsrProviderStatus
       }
       if (message.type === 'METRICS_UPDATE') {
         metricsStore.update(message.payload as Metrics)

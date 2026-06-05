@@ -172,6 +172,33 @@ a {
   font-size: 13px;
 }
 
+.audio-meter {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e4eaf2;
+}
+
+.meter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #536173;
+  font-size: 13px;
+}
+
+.audio-meter p {
+  margin: 0;
+  color: #667386;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.audio-meter .error-text {
+  color: #b5472f;
+}
+
 .alert-line {
   display: flex;
   align-items: center;

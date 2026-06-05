@@ -1,4 +1,5 @@
 import type { WsMessage } from '../types'
+import type { AudioChunkMeta } from './audioCapture'
 
 type MessageHandler = (message: WsMessage) => void
 type StatusHandler = (status: 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR') => void
@@ -38,6 +39,34 @@ class WsClient {
     this.send({
       type: 'START_MOCK_TRANSLATE',
       payload: { topic }
+    })
+  }
+
+  sendStartAudioStream(sampleRate = 16000) {
+    this.send({
+      type: 'START_AUDIO_STREAM',
+      payload: {
+        chunkIndex: 0,
+        timestamp: Date.now(),
+        format: 'pcm_s16le',
+        sampleRate,
+        channels: 1,
+        level: 0
+      }
+    })
+  }
+
+  sendAudioChunk(meta: AudioChunkMeta, data: ArrayBuffer) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify({ type: 'AUDIO_CHUNK_META', payload: meta }))
+      this.socket.send(data)
+    }
+  }
+
+  sendStopAudioStream() {
+    this.send({
+      type: 'STOP_AUDIO_STREAM',
+      payload: {}
     })
   }
 
