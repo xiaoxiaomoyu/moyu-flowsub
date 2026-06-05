@@ -3,12 +3,13 @@ package com.moyu.flowsub;
 import com.moyu.flowsub.asr.AsrProperties;
 import com.moyu.flowsub.qiniu.QiniuAiProperties;
 import com.moyu.flowsub.qiniu.QiniuProperties;
+import com.moyu.flowsub.translation.DeepSeekProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @SpringBootApplication
-@EnableConfigurationProperties({QiniuProperties.class, QiniuAiProperties.class, AsrProperties.class})
+@EnableConfigurationProperties({QiniuProperties.class, QiniuAiProperties.class, AsrProperties.class, DeepSeekProperties.class})
 public class MoYuFlowSubApplication {
 
     public static void main(String[] args) {
