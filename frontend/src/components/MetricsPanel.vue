@@ -39,6 +39,18 @@ const metrics = computed(() => metricsStore.metrics)
         <span>修正数</span>
         <strong>{{ metrics.correctionCount }}</strong>
       </div>
+      <div>
+        <span>音频块</span>
+        <strong>{{ metrics.audioChunkCount }}</strong>
+      </div>
+      <div>
+        <span>ASR</span>
+        <strong>{{ metrics.providerName }}</strong>
+      </div>
+      <div>
+        <span>降级状态</span>
+        <strong>{{ metrics.providerFallback ? '已降级' : '主链路' }}</strong>
+      </div>
     </div>
   </section>
 </template>
