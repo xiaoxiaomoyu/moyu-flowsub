@@ -1,0 +1,394 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: #eef2f6;
+  color: #18202f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    linear-gradient(120deg, rgba(42, 120, 210, 0.08), transparent 34%),
+    linear-gradient(220deg, rgba(12, 148, 116, 0.1), transparent 30%),
+    #eef2f6;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 22px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  max-width: 1480px;
+  margin: 0 auto 18px;
+  padding: 14px 18px;
+  border: 1px solid #d8e0eb;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 40px rgba(31, 43, 70, 0.08);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.topbar p {
+  margin: 6px 0 0;
+  color: #5c6878;
+  font-size: 14px;
+}
+
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topnav a {
+  padding: 9px 12px;
+  border-radius: 6px;
+  color: #4f5d70;
+  font-size: 14px;
+}
+
+.topnav a.router-link-active,
+.topnav a:hover {
+  background: #10243d;
+  color: #ffffff;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(420px, 1fr) minmax(280px, 360px);
+  gap: 16px;
+  max-width: 1480px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.left-column,
+.right-column {
+  display: grid;
+  gap: 16px;
+}
+
+.panel {
+  border: 1px solid #d9e2ee;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 34px rgba(31, 43, 70, 0.07);
+  padding: 16px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panel-header h2,
+.summary-placeholder h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 720;
+  letter-spacing: 0;
+}
+
+.control-form :deep(.el-form-item) {
+  margin-bottom: 13px;
+}
+
+.form-grid,
+.status-grid,
+.metric-grid,
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.button-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.button-stack .el-button {
+  width: 100%;
+  margin-left: 0;
+}
+
+.session-status {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e4eaf2;
+}
+
+.session-status div,
+.status-grid div,
+.metric-grid div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.session-status span,
+.status-grid span,
+.metric-grid span,
+.metric-primary span,
+.subtitle-meta {
+  color: #687587;
+  font-size: 12px;
+}
+
+.session-status strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #243149;
+  font-size: 13px;
+}
+
+.alert-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.5;
+}
+
+.qiniu-main {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f2f7f5;
+}
+
+.qiniu-icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #0b8f72;
+  color: #ffffff;
+}
+
+.qiniu-main strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.qiniu-main p,
+.empty-state p,
+.summary-placeholder p {
+  margin: 0;
+  color: #667386;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.status-grid {
+  margin-top: 12px;
+}
+
+.subtitle-panel {
+  min-height: calc(100vh - 126px);
+}
+
+.subtitle-list,
+.correction-list {
+  display: grid;
+  gap: 12px;
+}
+
+.subtitle-item,
+.correction-item {
+  border: 1px solid #dde5ef;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfdff;
+}
+
+.subtitle-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.source-text {
+  margin: 0 0 8px;
+  color: #26344b;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.target-text {
+  margin: 0;
+  color: #0c6f5c;
+  font-size: 22px;
+  line-height: 1.45;
+  font-weight: 720;
+}
+
+.old-text,
+.new-text,
+.reason {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.old-text {
+  color: #8a4f36;
+  text-decoration: line-through;
+}
+
+.new-text {
+  color: #0b745f;
+  font-weight: 700;
+}
+
+.reason {
+  color: #647185;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  border: 1px dashed #c7d3e1;
+  border-radius: 8px;
+  background: #f7fafd;
+  text-align: center;
+  padding: 20px;
+}
+
+.empty-state.compact {
+  min-height: 140px;
+}
+
+.metric-primary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 8px;
+  background: #10243d;
+  color: #ffffff;
+}
+
+.metric-primary .el-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.metric-primary strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.metric-grid {
+  margin-top: 12px;
+}
+
+.metric-grid div,
+.summary-grid div {
+  padding: 12px;
+  border: 1px solid #e0e7f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.metric-grid strong {
+  color: #1f2d43;
+}
+
+.secondary-page {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.summary-placeholder {
+  min-height: 320px;
+}
+
+.summary-grid {
+  margin-top: 18px;
+}
+
+@media (max-width: 1180px) {
+  .workspace {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .center-column {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .subtitle-panel {
+    min-height: 520px;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    padding: 12px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .topnav {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .workspace,
+  .form-grid,
+  .metric-grid,
+  .status-grid,
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .source-text {
+    font-size: 15px;
+  }
+
+  .target-text {
+    font-size: 18px;
+  }
+}

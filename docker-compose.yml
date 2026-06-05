@@ -1,0 +1,21 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      QINIU_ACCESS_KEY: ${QINIU_ACCESS_KEY:-}
+      QINIU_SECRET_KEY: ${QINIU_SECRET_KEY:-}
+      QINIU_BUCKET: ${QINIU_BUCKET:-}
+      QINIU_DOMAIN: ${QINIU_DOMAIN:-}
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+# 后续接入持久化和缓存时，可以在这里增加 MySQL 与 Redis 服务。

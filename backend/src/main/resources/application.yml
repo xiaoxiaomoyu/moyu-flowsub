@@ -1,0 +1,17 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: moyu-flowsub-backend
+
+qiniu:
+  enabled: false
+  access-key: ${QINIU_ACCESS_KEY:}
+  secret-key: ${QINIU_SECRET_KEY:}
+  bucket: ${QINIU_BUCKET:}
+  domain: ${QINIU_DOMAIN:}
+
+moyu:
+  flowsub:
+    mock-enabled: true
