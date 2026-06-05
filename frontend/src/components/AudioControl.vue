@@ -29,6 +29,8 @@ const eventLabels: Record<string, string> = {
   ASR_PARTIAL: '收到临时识别',
   ASR_FINAL: '收到稳定识别',
   ASR_PROVIDER_STATUS: 'ASR 状态更新',
+  TRANSLATION_STARTED: '开始翻译',
+  TRANSLATION_PROVIDER_STATUS: '翻译状态更新',
   SUBTITLE_UPDATE: '收到字幕更新',
   SUBTITLE_CORRECTION: '收到字幕修正',
   METRICS_UPDATE: '收到指标更新',
@@ -167,6 +169,10 @@ function eventText(type: string) {
         <span>识别连接</span>
         <strong>{{ sessionStore.asrProviderStatus.connected ? '已连接' : '未连接' }}</strong>
       </div>
+      <div>
+        <span>翻译 Provider</span>
+        <strong>{{ sessionStore.translationProviderStatus.provider }}</strong>
+      </div>
     </div>
 
     <div class="audio-meter" v-if="sessionStore.currentSession">
@@ -179,6 +185,7 @@ function eventText(type: string) {
       <p v-if="sessionStore.asrProviderStatus.reason">
         {{ sessionStore.asrProviderStatus.reason }}
       </p>
+      <p>{{ sessionStore.translationProviderStatus.message }}</p>
       <p v-if="sessionStore.audioCapture.errorMessage" class="error-text">
         {{ sessionStore.audioCapture.errorMessage }}
       </p>
@@ -192,7 +199,7 @@ function eventText(type: string) {
       title="创建会话后会自动建立 WebSocket 连接"
     >
       <template #default>
-        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 第三阶段优先使用七牛云真实识别，FunASR 和 Mock 作为兜底。</div>
+        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 第四阶段已接入 DeepSeek 翻译，未配置时自动降级到 Mock 翻译。</div>
       </template>
     </el-alert>
   </section>

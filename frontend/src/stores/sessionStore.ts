@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { createSession, finishSession, listSessions } from '../api/sessionApi'
-import type { AsrProviderStatus, CreateSessionRequest, FlowSession, Metrics, SubtitleCorrection, SubtitleSegment, WsMessage } from '../types'
+import type { AsrProviderStatus, CreateSessionRequest, FlowSession, Metrics, SubtitleCorrection, SubtitleSegment, TranslationProviderStatus, WsMessage } from '../types'
 import { audioCapture, type AudioCaptureState } from '../utils/audioCapture'
 import { wsClient } from '../utils/wsClient'
 import { useMetricsStore } from './metricsStore'
@@ -25,6 +25,14 @@ const emptyProviderStatus: AsrProviderStatus = {
   endpointType: 'NONE'
 }
 
+const emptyTranslationProviderStatus: TranslationProviderStatus = {
+  provider: '等待翻译',
+  available: false,
+  fallback: false,
+  message: '收到稳定 ASR 字幕后开始翻译。',
+  reason: '等待稳定字幕。'
+}
+
 export const useSessionStore = defineStore('session', {
   state: () => ({
     currentSession: null as FlowSession | null,
@@ -33,7 +41,8 @@ export const useSessionStore = defineStore('session', {
     loading: false,
     lastEvent: '',
     audioCapture: { ...emptyAudioState },
-    asrProviderStatus: { ...emptyProviderStatus }
+    asrProviderStatus: { ...emptyProviderStatus },
+    translationProviderStatus: { ...emptyTranslationProviderStatus }
   }),
   actions: {
     async create(payload: CreateSessionRequest) {
@@ -46,6 +55,7 @@ export const useSessionStore = defineStore('session', {
         metricsStore.reset()
         this.audioCapture = { ...emptyAudioState }
         this.asrProviderStatus = { ...emptyProviderStatus }
+        this.translationProviderStatus = { ...emptyTranslationProviderStatus }
         this.currentSession = await createSession(payload)
         this.connectCurrentSession()
       } finally {
@@ -132,6 +142,9 @@ export const useSessionStore = defineStore('session', {
       }
       if (message.type === 'ASR_PROVIDER_STATUS') {
         this.asrProviderStatus = message.payload as AsrProviderStatus
+      }
+      if (message.type === 'TRANSLATION_PROVIDER_STATUS') {
+        this.translationProviderStatus = message.payload as TranslationProviderStatus
       }
       if (message.type === 'METRICS_UPDATE') {
         metricsStore.update(message.payload as Metrics)
