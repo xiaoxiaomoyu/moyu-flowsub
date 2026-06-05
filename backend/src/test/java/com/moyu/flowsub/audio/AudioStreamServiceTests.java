@@ -1,11 +1,12 @@
 package com.moyu.flowsub.audio;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moyu.flowsub.asr.AsrProperties;
 import com.moyu.flowsub.asr.AsrService;
 import com.moyu.flowsub.asr.FunAsrProvider;
 import com.moyu.flowsub.asr.MockAsrProvider;
 import com.moyu.flowsub.asr.QiniuAsrProvider;
-import com.moyu.flowsub.qiniu.QiniuProperties;
+import com.moyu.flowsub.qiniu.QiniuAiProperties;
 import com.moyu.flowsub.session.CreateSessionRequest;
 import com.moyu.flowsub.session.SessionService;
 import org.junit.jupiter.api.Test;
@@ -18,11 +19,12 @@ class AudioStreamServiceTests {
 
     @Test
     void shouldFallbackToMockAsrWhenCloudProviderUnavailable() {
-        AsrProperties asrProperties = new AsrProperties(true, "", 750);
-        QiniuProperties qiniuProperties = new QiniuProperties(false, "", "", "", "");
+        ObjectMapper objectMapper = new ObjectMapper();
+        AsrProperties asrProperties = new AsrProperties(true, false, "", "", 300);
+        QiniuAiProperties qiniuAiProperties = new QiniuAiProperties(false, "", "wss://openai.qiniu.com/v1/voice/asr");
         AsrService asrService = new AsrService(List.of(
-                new QiniuAsrProvider(qiniuProperties),
-                new FunAsrProvider(asrProperties),
+                new QiniuAsrProvider(qiniuAiProperties, objectMapper),
+                new FunAsrProvider(asrProperties, objectMapper),
                 new MockAsrProvider(asrProperties)
         ));
         SessionService sessionService = new SessionService();
@@ -38,11 +40,37 @@ class AudioStreamServiceTests {
         }
 
         assertThat(result).isNotNull();
-        assertThat(result.asrResult()).isNotNull();
-        assertThat(result.asrResult().status()).isEqualTo("FINAL");
+        assertThat(result.asrResults()).hasSize(1);
+        assertThat(result.asrResults().get(0).status()).isEqualTo("FINAL");
         assertThat(result.providerStatus().provider()).isEqualTo("Mock ASR");
         assertThat(result.providerStatus().fallback()).isTrue();
+        assertThat(result.providerStatus().endpointType()).isEqualTo("MOCK");
         assertThat(result.chunkCount()).isEqualTo(3);
         assertThat(result.subtitleCount()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldExposeUnavailableStatusWhenAllProvidersDisabled() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        AsrProperties asrProperties = new AsrProperties(false, false, "", "", 300);
+        QiniuAiProperties qiniuAiProperties = new QiniuAiProperties(false, "", "wss://openai.qiniu.com/v1/voice/asr");
+        AsrService asrService = new AsrService(List.of(
+                new QiniuAsrProvider(qiniuAiProperties, objectMapper),
+                new FunAsrProvider(asrProperties, objectMapper),
+                new MockAsrProvider(asrProperties)
+        ));
+        SessionService sessionService = new SessionService();
+        AudioStreamService audioStreamService = new AudioStreamService(sessionService, asrService);
+        String sessionId = sessionService.create(new CreateSessionRequest("禁用测试", "en", "zh", "TECH_TALK")).getSessionId();
+
+        audioStreamService.start(sessionId, new AudioChunkMeta(0, System.currentTimeMillis(), "pcm_s16le", 16000, 1, 0));
+        AudioStreamProcessResult result = audioStreamService.accept(sessionId,
+                new AudioChunkMeta(1, System.currentTimeMillis(), "pcm_s16le", 16000, 1, 0.4),
+                new byte[3200]);
+
+        assertThat(result.asrResults()).isEmpty();
+        assertThat(result.providerStatus().available()).isFalse();
+        assertThat(result.providerStatus().endpointType()).isEqualTo("NONE");
+        assertThat(result.providerStatus().reason()).contains("七牛云智能语音");
     }
 }
