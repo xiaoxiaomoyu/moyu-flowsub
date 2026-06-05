@@ -15,3 +15,7 @@ qiniu:
 moyu:
   flowsub:
     mock-enabled: true
+    asr:
+      mock-enabled: ${ASR_MOCK_ENABLED:true}
+      funasr-endpoint: ${FUNASR_ENDPOINT:}
+      chunk-duration-ms: ${AUDIO_CHUNK_DURATION_MS:750}
