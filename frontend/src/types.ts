@@ -59,6 +59,8 @@ export interface Metrics {
   audioChunkCount: number
   providerName: string
   providerFallback: boolean
+  translationProviderName: string
+  translationProviderFallback: boolean
 }
 
 export interface AsrProviderStatus {
@@ -69,6 +71,14 @@ export interface AsrProviderStatus {
   connected: boolean
   reason: string
   endpointType: string
+}
+
+export interface TranslationProviderStatus {
+  provider: string
+  available: boolean
+  fallback: boolean
+  message: string
+  reason: string
 }
 
 export interface AudioStreamStarted {

@@ -3,7 +3,7 @@
     <header class="topbar">
       <div>
         <h1>会后总结</h1>
-        <p>第一阶段保留页面入口，真实总结将在后续接入 DeepSeek-V4-Pro 后生成。</p>
+        <p>当前阶段先完成实时翻译与上下文修正，会后总结将在后续归档流程中生成。</p>
       </div>
       <nav class="topnav">
         <RouterLink to="/">返回实时同传</RouterLink>

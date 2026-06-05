@@ -51,6 +51,14 @@ const metrics = computed(() => metricsStore.metrics)
         <span>降级状态</span>
         <strong>{{ metrics.providerFallback ? '已降级' : '主链路' }}</strong>
       </div>
+      <div>
+        <span>翻译模型</span>
+        <strong>{{ metrics.translationProviderName }}</strong>
+      </div>
+      <div>
+        <span>翻译链路</span>
+        <strong>{{ metrics.translationProviderFallback ? '已降级' : '主链路' }}</strong>
+      </div>
     </div>
   </section>
 </template>
