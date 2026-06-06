@@ -50,6 +50,7 @@ class AudioCapture {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true,
           channelCount: 1
         }
       })

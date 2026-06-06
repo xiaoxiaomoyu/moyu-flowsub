@@ -14,6 +14,8 @@ import com.moyu.flowsub.session.SessionService;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
 import com.moyu.flowsub.translation.TranslationProcessResult;
 import com.moyu.flowsub.translation.TranslationService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.BinaryMessage;
@@ -31,6 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 public class TranslateWebSocketHandler extends TextWebSocketHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(TranslateWebSocketHandler.class);
     private static final UriTemplate URI_TEMPLATE = new UriTemplate("/ws/translate/{sessionId}");
 
     private final ObjectMapper objectMapper;
@@ -85,8 +88,25 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleBinaryMessage(WebSocketSession session, BinaryMessage message) {
+        try {
+            handleAudioBinaryMessage(session, message);
+        } catch (Exception e) {
+            // 音频帧处理异常不能直接断开前端 WebSocket，否则浏览器会继续本地采集但后端完全收不到数据。
+            log.warn("音频帧处理失败，sessionId={}", extractSessionId(session), e);
+            String sessionId = extractSessionId(session);
+            AsrProviderStatusPayload status = audioStreamService.providerStatus(sessionId);
+            sendQuietly(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId,
+                    new AsrProviderStatusPayload(status.provider(), status.available(), true,
+                            "音频帧处理异常，已保留 WebSocket 连接。", status.connected(),
+                            e.getMessage() == null ? "后端处理音频帧时发生未知异常。" : e.getMessage(),
+                            status.endpointType())));
+        }
+    }
+
+    private void handleAudioBinaryMessage(WebSocketSession session, BinaryMessage message) {
         AudioChunkMeta meta = pendingAudioMetas.remove(session.getId());
         if (meta == null) {
+            log.warn("收到音频二进制帧但缺少元数据，webSocketSessionId={}", session.getId());
             return;
         }
 
@@ -96,6 +116,13 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
         AudioStreamProcessResult result = audioStreamService.accept(sessionId, meta, data);
 
         sendQuietly(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, result.providerStatus()));
+        if (result.asrResults().isEmpty()) {
+            // 真实 ASR 可能需要几秒才返回文本，但音频块计数应实时更新，方便前端判断链路是否在工作。
+            sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
+                    new MetricsPayload(0, 0, 0, result.subtitleCount(), 0,
+                            result.chunkCount(), result.providerStatus().provider(), result.providerStatus().fallback())));
+            return;
+        }
         for (AsrResult asrResult : result.asrResults()) {
             if ("FINAL".equals(asrResult.status())) {
                 startTranslation(session, sessionId, asrResult, result);
@@ -120,6 +147,7 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        log.info("浏览器 WebSocket 已关闭，sessionId={}，closeStatus={}", extractSessionId(session), status);
         AtomicBoolean running = runningSessions.remove(session.getId());
         if (running != null) {
             running.set(false);
@@ -127,6 +155,12 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
         pendingAudioMetas.remove(session.getId());
         audioStreamService.stop(extractSessionId(session));
         translationService.clear(extractSessionId(session));
+    }
+
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
+        log.warn("浏览器 WebSocket 传输异常，sessionId={}", extractSessionId(session), exception);
+        super.handleTransportError(session, exception);
     }
 
     private void startAudioStream(WebSocketSession session, JsonNode payload) throws IOException {
@@ -165,14 +199,15 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
                 }
                 MockSubtitle mock = subtitles.get(i);
                 long totalLatency = mock.asrLatencyMs() + mock.translateLatencyMs();
-                sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId,
-                        new SubtitlePayload(mock.segmentId(), mock.sourceText(), mock.translatedText(),
-                                "FINAL", 1, false, totalLatency)));
+                SubtitlePayload subtitle = new SubtitlePayload(mock.segmentId(), mock.sourceText(), mock.translatedText(),
+                        "FINAL", 1, false, totalLatency);
+                sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId, subtitle));
 
                 if (i == 3) {
                     // 第 4 条字幕后修正第 2 条字幕，模拟“后文到来后纠正历史结果”。
                     correctionCount = 1;
-                    sendQuietly(session, WsMessage.of("SUBTITLE_CORRECTION", sessionId, mockSubtitleProvider.correction()));
+                    var correction = mockSubtitleProvider.correction();
+                    sendQuietly(session, WsMessage.of("SUBTITLE_CORRECTION", sessionId, correction));
                 }
 
                 // 指标与字幕同步推送，前端可以实时观察链路延迟。

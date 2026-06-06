@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class AsrService {
@@ -19,15 +20,40 @@ public class AsrService {
     }
 
     public AsrStreamSession start(String sessionId, AudioChunkMeta meta) {
+        return start(sessionId, meta, Set.of(), "");
+    }
+
+    public AsrStreamSession startExcluding(String sessionId,
+                                           AudioChunkMeta meta,
+                                           Set<String> excludedProviders,
+                                           String initialReason) {
+        return start(sessionId, meta, excludedProviders, initialReason);
+    }
+
+    private AsrStreamSession start(String sessionId,
+                                   AudioChunkMeta meta,
+                                   Set<String> excludedProviders,
+                                   String initialReason) {
         StringBuilder fallbackReasons = new StringBuilder();
+        if (initialReason != null && !initialReason.isBlank()) {
+            fallbackReasons.append(initialReason);
+        }
         for (AsrProvider provider : providers) {
+            if (excludedProviders.contains(provider.name())) {
+                appendReason(fallbackReasons, provider.name(), "本次会话已触发降级，跳过重连。");
+                continue;
+            }
             AsrProviderStatusPayload status = provider.status();
             if (!status.available()) {
                 appendReason(fallbackReasons, status.provider(), status.reason());
                 continue;
             }
             try {
-                return provider.start(sessionId, meta);
+                AsrStreamSession session = provider.start(sessionId, meta);
+                if (!fallbackReasons.isEmpty()) {
+                    return new FallbackReasonAsrStreamSession(session, fallbackReasons.toString());
+                }
+                return session;
             } catch (Exception e) {
                 appendReason(fallbackReasons, status.provider(), e.getMessage());
             }
@@ -51,6 +77,38 @@ public class AsrService {
             builder.append("；");
         }
         builder.append(provider).append("：").append(reason == null ? "不可用" : reason);
+    }
+
+    private static class FallbackReasonAsrStreamSession implements AsrStreamSession {
+        private final AsrStreamSession delegate;
+        private final String fallbackReason;
+
+        private FallbackReasonAsrStreamSession(AsrStreamSession delegate, String fallbackReason) {
+            this.delegate = delegate;
+            this.fallbackReason = fallbackReason;
+        }
+
+        @Override
+        public AsrProviderStatusPayload status() {
+            AsrProviderStatusPayload status = delegate.status();
+            return new AsrProviderStatusPayload(status.provider(), status.available(), true, status.message(),
+                    status.connected(), fallbackReason, status.endpointType());
+        }
+
+        @Override
+        public List<AsrResult> accept(AudioChunk chunk) {
+            return delegate.accept(chunk);
+        }
+
+        @Override
+        public List<AsrResult> stop() {
+            return delegate.stop();
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
     }
 
     private static class EmptyAsrStreamSession implements AsrStreamSession {

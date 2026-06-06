@@ -106,7 +106,11 @@ public class FunAsrProvider implements AsrProvider {
 
         @Override
         public List<AsrResult> accept(AudioChunk chunk) {
-            webSocket.sendBinary(ByteBuffer.wrap(chunk.data()), true).join();
+            try {
+                webSocket.sendBinary(ByteBuffer.wrap(chunk.data()), true).get(2, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                throw new AsrProviderUnavailableException("FunASR 发送音频块超时或失败，准备降级。", e);
+            }
             return drainResults();
         }
 
