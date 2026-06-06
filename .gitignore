@@ -28,7 +28,12 @@ pnpm-debug.log*
 reference-docs/
 docs/
 AGENTS.md
+funasr_ws_server.py
 
 # Logs
 logs/
 *.log
+
+# Claude
+.claude/
+.firecrawl/
