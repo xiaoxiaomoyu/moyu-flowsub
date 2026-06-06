@@ -45,7 +45,16 @@ const permissionLabels: Record<string, string> = {
   ERROR: '异常'
 }
 
-const levelPercent = computed(() => Math.min(100, Math.round(sessionStore.audioCapture.level * 180)))
+const levelPercent = computed(() => displayLevelPercent(sessionStore.audioCapture.level))
+
+function displayLevelPercent(level: number) {
+  if (level <= 0) {
+    return 0
+  }
+  // Worklet 上报的是原始 RMS。这里仅将显示改为分贝刻度，避免真实语音长期停在 2% 左右。
+  const db = 20 * Math.log10(Math.max(level, 0.00001))
+  return Math.min(100, Math.max(0, Math.round(((db + 55) / 45) * 100)))
+}
 
 function connectionText(status: string) {
   return connectionLabels[status] ?? status

@@ -75,6 +75,14 @@ export const useSessionStore = defineStore('session', {
         (message) => this.handleWsMessage(message),
         (status) => {
           this.connectionStatus = status
+          if ((status === 'DISCONNECTED' || status === 'ERROR') && this.audioCapture.running) {
+            audioCapture.stop()
+            this.audioCapture = {
+              ...audioCapture.snapshot(),
+              permissionStatus: 'ERROR',
+              errorMessage: 'WebSocket 已断开，已自动停止麦克风采集。请重新创建会话后再开始采集。'
+            }
+          }
         }
       )
     },
@@ -93,11 +101,20 @@ export const useSessionStore = defineStore('session', {
       this.lastEvent = 'START_AUDIO_STREAM'
       try {
         await audioCapture.start(
-          (meta, data) => wsClient.sendAudioChunk(meta, data),
+          (meta, data) => {
+            if (!wsClient.sendAudioChunk(meta, data)) {
+              audioCapture.stop()
+              this.audioCapture = {
+                ...audioCapture.snapshot(),
+                permissionStatus: 'ERROR',
+                errorMessage: 'WebSocket 未连接，音频块没有发送到后端。请重新创建会话后再开始采集。'
+              }
+            }
+          },
           (state) => {
             this.audioCapture = state
           },
-          Number(import.meta.env.VITE_AUDIO_CHUNK_DURATION_MS || 300)
+          Number(import.meta.env.VITE_AUDIO_CHUNK_DURATION_MS || 200)
         )
       } catch {
         wsClient.sendStopAudioStream()

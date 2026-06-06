@@ -60,7 +60,9 @@ class WsClient {
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify({ type: 'AUDIO_CHUNK_META', payload: meta }))
       this.socket.send(data)
+      return true
     }
+    return false
   }
 
   sendStopAudioStream() {

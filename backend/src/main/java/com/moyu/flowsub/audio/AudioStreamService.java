@@ -10,14 +10,17 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AudioStreamService {
 
     private static final int MAX_RECENT_CHUNKS = 24;
+    private static final int NO_RESULT_FALLBACK_CHUNKS = 20;
 
     private final SessionService sessionService;
     private final AsrService asrService;
@@ -80,9 +83,11 @@ public class AudioStreamService {
 
     private static class StreamState {
         private final Deque<AudioChunk> recentChunks = new ArrayDeque<>();
+        private final Set<String> excludedProviders = new HashSet<>();
         private AsrStreamSession asrSession;
         private int chunkCount;
         private int subtitleCount;
+        private int chunksWithoutText;
 
         private StreamState(AsrStreamSession asrSession) {
             this.asrSession = asrSession;
@@ -100,12 +105,44 @@ public class AudioStreamService {
 
     private List<AsrResult> acceptWithFallback(String sessionId, AudioChunkMeta meta, StreamState state, AudioChunk chunk) {
         try {
-            return state.asrSession.accept(chunk);
+            List<AsrResult> results = state.asrSession.accept(chunk);
+            if (!results.isEmpty()) {
+                state.chunksWithoutText = 0;
+                return results;
+            }
+            return fallbackIfProviderSilent(sessionId, meta, state, chunk);
         } catch (Exception ignored) {
             // 真实 ASR 长连接可能在演示中途断开，立即重选 Provider，保证页面仍能继续出字幕。
-            state.asrSession.close();
-            state.asrSession = asrService.start(sessionId, meta);
+            switchProvider(sessionId, meta, state, "当前 ASR 长连接处理音频失败，已自动降级。");
             return state.asrSession.accept(chunk);
         }
+    }
+
+    private List<AsrResult> fallbackIfProviderSilent(String sessionId,
+                                                     AudioChunkMeta meta,
+                                                     StreamState state,
+                                                     AudioChunk chunk) {
+        AsrProviderStatusPayload status = state.asrSession.status();
+        if ("MOCK".equals(status.endpointType()) || "NONE".equals(status.endpointType())) {
+            return List.of();
+        }
+        state.chunksWithoutText++;
+        if (state.chunksWithoutText < NO_RESULT_FALLBACK_CHUNKS) {
+            return List.of();
+        }
+
+        String reason = "已连续接收 " + state.chunksWithoutText + " 个音频块，但 "
+                + status.provider() + " 未返回任何字幕文本，已自动降级。";
+        switchProvider(sessionId, meta, state, reason);
+        return state.asrSession.accept(chunk);
+    }
+
+    private void switchProvider(String sessionId, AudioChunkMeta meta, StreamState state, String reason) {
+        AsrProviderStatusPayload currentStatus = state.asrSession.status();
+        state.excludedProviders.add(currentStatus.provider());
+        state.asrSession.close();
+        state.chunksWithoutText = 0;
+        // 降级后保留原始失败原因，前端可以看到为什么没有继续使用七牛云或 FunASR。
+        state.asrSession = asrService.startExcluding(sessionId, meta, Set.copyOf(state.excludedProviders), reason);
     }
 }

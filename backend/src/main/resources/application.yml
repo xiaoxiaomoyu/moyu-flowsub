@@ -6,22 +6,22 @@ spring:
     name: moyu-flowsub-backend
 
 qiniu:
-  enabled: false
+  enabled: true
   access-key: ${QINIU_ACCESS_KEY:}
   secret-key: ${QINIU_SECRET_KEY:}
   bucket: ${QINIU_BUCKET:}
   domain: ${QINIU_DOMAIN:}
   ai:
-    asr-enabled: ${QINIU_ASR_ENABLED:false}
+    asr-enabled: ${QINIU_ASR_ENABLED:true}
     api-key: ${QINIU_AI_API_KEY:}
-    asr-ws-url: ${QINIU_ASR_WS_URL:wss://openai.qiniu.com/v1/voice/asr}
+    asr-ws-url: ${QINIU_ASR_WS_URL:wss://api.qnaigc.com/v1/voice/asr}
 
 moyu:
   flowsub:
     mock-enabled: true
     asr:
       mock-enabled: ${ASR_MOCK_ENABLED:true}
-      funasr-enabled: ${FUNASR_ENABLED:true}
+      funasr-enabled: ${FUNASR_ENABLED:false}
       funasr-endpoint: ${FUNASR_ENDPOINT:}
       funasr-ws-endpoint: ${FUNASR_WS_ENDPOINT:${FUNASR_ENDPOINT:}}
       chunk-duration-ms: ${AUDIO_CHUNK_DURATION_MS:300}

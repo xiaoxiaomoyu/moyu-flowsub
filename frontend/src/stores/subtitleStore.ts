@@ -17,7 +17,8 @@ export const useSubtitleStore = defineStore('subtitle', {
       if (existing >= 0) {
         this.subtitles[existing] = subtitle
       } else {
-        this.subtitles.push(subtitle)
+        // 实时观看时最新字幕放在最上方，避免用户一直向下滚动追字幕。
+        this.subtitles.unshift(subtitle)
       }
     },
     applyCorrection(correction: SubtitleCorrection) {
