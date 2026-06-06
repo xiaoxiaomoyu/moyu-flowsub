@@ -2,6 +2,8 @@ package com.moyu.flowsub.archive;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moyu.flowsub.metrics.MetricsPayload;
+import com.moyu.flowsub.playback.PlaybackCue;
+import com.moyu.flowsub.playback.PlaybackManifestResponse;
 import com.moyu.flowsub.qiniu.KodoUploadResult;
 import com.moyu.flowsub.qiniu.QiniuProperties;
 import com.moyu.flowsub.qiniu.QiniuService;
@@ -15,9 +17,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -114,6 +119,38 @@ public class ArchiveService {
                 .toList();
     }
 
+    public PlaybackManifestResponse playbackManifest(String sessionId) {
+        FlowSession session = sessionService.get(sessionId);
+        ArchiveState state = state(sessionId);
+        synchronized (state) {
+            ArchiveSnapshot snapshot = state.snapshot(session);
+            List<PlaybackCue> cues = playbackCues(snapshot);
+            String audioUrl = resourceUrl(state.resources, ArchiveResourceType.AUDIO_WAV);
+            String subtitleUrl = resourceUrl(state.resources, ArchiveResourceType.SUBTITLES_VTT);
+            if (!StringUtils.hasText(audioUrl) && state.audio.size() > 0) {
+                audioUrl = "data:audio/wav;base64," + Base64.getEncoder().encodeToString(wavBytes(state.audioBytes()));
+            }
+            if (!StringUtils.hasText(subtitleUrl) && !snapshot.subtitles().isEmpty()) {
+                subtitleUrl = "data:text/vtt;charset=utf-8;base64,"
+                        + Base64.getEncoder().encodeToString(webVtt(cues).getBytes(StandardCharsets.UTF_8));
+            }
+            boolean fallback = !qiniuService.uploadReady() || !StringUtils.hasText(audioUrl);
+            return new PlaybackManifestResponse(
+                    sessionId,
+                    session,
+                    audioUrl,
+                    subtitleUrl,
+                    cues,
+                    snapshot.corrections(),
+                    state.summary,
+                    state.resources,
+                    fallback ? "本地回放" : "Kodo 回放",
+                    fallback,
+                    fallback ? "未检测到 Kodo 回放资源，已使用本地内存回放清单。" : "Kodo 回放资源已就绪。"
+            );
+        }
+    }
+
     private ArchiveState state(String sessionId) {
         return archives.computeIfAbsent(sessionId, ignored -> new ArchiveState());
     }
@@ -132,6 +169,15 @@ public class ArchiveService {
         contents.put(ArchiveResourceType.INSIGHTS, json("insights.json", insights));
         contents.put(ArchiveResourceType.AUDIO, new ResourceContent("audio.pcm", "application/octet-stream",
                 state(sessionId).audioBytes()));
+        byte[] wav = wavBytes(state(sessionId).audioBytes());
+        List<PlaybackCue> cues = playbackCues(snapshot);
+        contents.put(ArchiveResourceType.AUDIO_WAV, new ResourceContent("audio.wav", "audio/wav", wav));
+        contents.put(ArchiveResourceType.SUBTITLES_VTT, new ResourceContent("subtitles.vtt", "text/vtt; charset=utf-8",
+                webVtt(cues).getBytes(StandardCharsets.UTF_8)));
+        contents.put(ArchiveResourceType.PLAYBACK_MANIFEST, json("playback-manifest.json",
+                new PlaybackManifestResponse(sessionId, snapshot.session(), "", "", cues, snapshot.corrections(),
+                        insights, List.of(), "归档生成", !qiniuService.uploadReady(),
+                        "完整资源 URL 会通过 /api/playback/sessions/" + sessionId + " 查询。")));
         return contents;
     }
 
@@ -170,6 +216,68 @@ public class ArchiveService {
                 ? qiniuProperties.archivePrefix()
                 : "moyu-flowsub";
         return prefix.replaceAll("^/+", "").replaceAll("/+$", "");
+    }
+
+    private String resourceUrl(List<ArchiveResourceResponse> resources, ArchiveResourceType type) {
+        return resources.stream()
+                .filter(resource -> resource.type() == type)
+                .map(ArchiveResourceResponse::url)
+                .filter(StringUtils::hasText)
+                .findFirst()
+                .orElse("");
+    }
+
+    private List<PlaybackCue> playbackCues(ArchiveSnapshot snapshot) {
+        List<PlaybackCue> cues = new ArrayList<>();
+        for (int i = 0; i < snapshot.subtitles().size(); i++) {
+            SubtitlePayload subtitle = snapshot.subtitles().get(i);
+            double start = i * 3.0;
+            cues.add(new PlaybackCue(subtitle.segmentId(), start, start + 3.0,
+                    subtitle.sourceText(), subtitle.translatedText(), subtitle.isCorrected()));
+        }
+        return cues;
+    }
+
+    private String webVtt(List<PlaybackCue> cues) {
+        StringBuilder builder = new StringBuilder("WEBVTT\n\n");
+        for (PlaybackCue cue : cues) {
+            builder.append(cue.segmentId()).append('\n');
+            builder.append(vttTime(cue.startSeconds())).append(" --> ").append(vttTime(cue.endSeconds())).append('\n');
+            builder.append(cue.sourceText()).append('\n');
+            builder.append(cue.translatedText()).append("\n\n");
+        }
+        return builder.toString();
+    }
+
+    private String vttTime(double seconds) {
+        long millis = Math.round(seconds * 1000);
+        long hours = millis / 3_600_000;
+        long minutes = (millis % 3_600_000) / 60_000;
+        long secs = (millis % 60_000) / 1000;
+        long ms = millis % 1000;
+        return "%02d:%02d:%02d.%03d".formatted(hours, minutes, secs, ms);
+    }
+
+    private byte[] wavBytes(byte[] pcm) {
+        int dataSize = pcm == null ? 0 : pcm.length;
+        ByteBuffer buffer = ByteBuffer.allocate(44 + dataSize).order(ByteOrder.LITTLE_ENDIAN);
+        buffer.put("RIFF".getBytes(StandardCharsets.US_ASCII));
+        buffer.putInt(36 + dataSize);
+        buffer.put("WAVE".getBytes(StandardCharsets.US_ASCII));
+        buffer.put("fmt ".getBytes(StandardCharsets.US_ASCII));
+        buffer.putInt(16);
+        buffer.putShort((short) 1);
+        buffer.putShort((short) 1);
+        buffer.putInt(16000);
+        buffer.putInt(16000 * 2);
+        buffer.putShort((short) 2);
+        buffer.putShort((short) 16);
+        buffer.put("data".getBytes(StandardCharsets.US_ASCII));
+        buffer.putInt(dataSize);
+        if (dataSize > 0) {
+            buffer.put(pcm);
+        }
+        return buffer.array();
     }
 
     private record ResourceContent(String filename, String contentType, byte[] data) {

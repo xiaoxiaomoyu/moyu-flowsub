@@ -10,5 +10,8 @@ public enum ArchiveResourceType {
     METRICS,
     SUMMARY,
     INSIGHTS,
-    AUDIO
+    AUDIO,
+    AUDIO_WAV,
+    SUBTITLES_VTT,
+    PLAYBACK_MANIFEST
 }

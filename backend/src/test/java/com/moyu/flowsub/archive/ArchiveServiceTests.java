@@ -43,12 +43,14 @@ class ArchiveServiceTests {
         assertThat(response.summaryMarkdown()).contains("修正数：1");
         assertThat(response.summary()).isNotNull();
         assertThat(response.summary().providerName()).isEqualTo("Mock 总结");
-        assertThat(response.resources()).hasSize(7);
+        assertThat(response.resources()).hasSize(10);
         assertThat(response.resources())
                 .extracting(ArchiveResourceResponse::type)
                 .containsExactly(ArchiveResourceType.METADATA, ArchiveResourceType.SUBTITLES,
                         ArchiveResourceType.CORRECTIONS, ArchiveResourceType.METRICS,
-                        ArchiveResourceType.SUMMARY, ArchiveResourceType.INSIGHTS, ArchiveResourceType.AUDIO);
+                        ArchiveResourceType.SUMMARY, ArchiveResourceType.INSIGHTS, ArchiveResourceType.AUDIO,
+                        ArchiveResourceType.AUDIO_WAV, ArchiveResourceType.SUBTITLES_VTT,
+                        ArchiveResourceType.PLAYBACK_MANIFEST);
         assertThat(response.resources())
                 .filteredOn(resource -> resource.type() == ArchiveResourceType.AUDIO)
                 .first()
@@ -69,9 +71,12 @@ class ArchiveServiceTests {
 
         assertThat(first.status()).isEqualTo(ArchiveStatus.LOCAL_ONLY);
         assertThat(second.status()).isEqualTo(ArchiveStatus.LOCAL_ONLY);
-        assertThat(second.resources()).hasSize(7);
+        assertThat(second.resources()).hasSize(10);
         assertThat(second.resources().get(0).key()).isEqualTo(first.resources().get(0).key());
         assertThat(second.summaryMarkdown()).contains("字幕数：1");
+        assertThat(second.resources())
+                .extracting(ArchiveResourceResponse::type)
+                .contains(ArchiveResourceType.PLAYBACK_MANIFEST);
     }
 
     @Test
@@ -101,11 +106,33 @@ class ArchiveServiceTests {
 
         assertThat(response.status()).isEqualTo(ArchiveStatus.UPLOADED);
         assertThat(response.message()).contains("七牛云 Kodo");
-        assertThat(response.resources()).hasSize(7);
+        assertThat(response.resources()).hasSize(10);
         assertThat(response.resources()).allMatch(resource -> resource.url().startsWith("https://kodo.example.com/"));
         assertThat(response.resources())
                 .extracting(ArchiveResourceResponse::type)
-                .contains(ArchiveResourceType.INSIGHTS);
+                .contains(ArchiveResourceType.INSIGHTS, ArchiveResourceType.AUDIO_WAV,
+                        ArchiveResourceType.SUBTITLES_VTT, ArchiveResourceType.PLAYBACK_MANIFEST);
+    }
+
+    @Test
+    void shouldExposePlaybackManifestForLocalArchive() {
+        SessionService sessionService = new SessionService();
+        ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(false, false),
+                qiniuProperties(), objectMapper(), summaryService());
+        String sessionId = createSession(sessionService);
+        archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "Playback needs cues.", "回放需要字幕时间轴。"));
+        archiveService.appendAudio(sessionId, new byte[]{1, 0, 2, 0});
+        archiveService.archiveSession(sessionId);
+
+        var manifest = archiveService.playbackManifest(sessionId);
+
+        assertThat(manifest.cues()).hasSize(1);
+        assertThat(manifest.audioUrl()).startsWith("data:audio/wav;base64,");
+        assertThat(manifest.subtitleUrl()).startsWith("data:text/vtt;charset=utf-8;base64,");
+        assertThat(manifest.resources())
+                .extracting(ArchiveResourceResponse::type)
+                .contains(ArchiveResourceType.AUDIO_WAV, ArchiveResourceType.SUBTITLES_VTT,
+                        ArchiveResourceType.PLAYBACK_MANIFEST);
     }
 
     private String createSession(SessionService sessionService) {
