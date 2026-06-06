@@ -11,6 +11,7 @@ public record DeepSeekProperties(
         String apiKey,
         String baseUrl,
         String model,
-        int timeoutMs
+        int timeoutMs,
+        double temperature
 ) {
 }

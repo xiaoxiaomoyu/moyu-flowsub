@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class TranslationService {
 
-    private static final int MAX_CONTEXT_SIZE = 6;
+    private static final int MAX_CONTEXT_SIZE = 3;
     private static final int MAX_CORRECTION_SIZE = 2;
 
     private final List<TranslationProvider> providers;
@@ -59,23 +59,41 @@ public class TranslationService {
                 false,
                 asrResult.latencyMs() + result.latencyMs()
         );
-        List<SubtitleCorrectionPayload> corrections = state.applyCorrections(result.corrections());
+        // 翻译链路不再携带修正，修正由 reviewCorrections() 异步独立触发，避免阻塞实时字幕展示。
         state.remember(new TranslationContextItem(
                 asrResult.segmentId(),
                 asrResult.text(),
                 result.translatedText(),
                 1
         ));
-        state.correctionCount += corrections.size();
         return new TranslationProcessResult(
                 subtitle,
-                corrections,
+                List.of(),
                 new TranslationProviderStatusPayload(result.providerName(), true, result.fallback(),
-                        result.fallback() ? "翻译已降级到 " + result.providerName() : "DeepSeek 翻译完成。",
+                        result.fallback() ? "翻译已降级到 " + result.providerName() : "DeepSeek 流式翻译完成。",
                         result.fallback() ? "DeepSeek 未配置或调用失败。" : "真实翻译链路正常。"),
                 result.latencyMs(),
                 state.correctionCount
         );
+    }
+
+    /**
+     * 异步上下文修正，取当前会话上下文窗口内的字幕，调用修正 Provider 检查是否需要修正。
+     * 由 WebSocket 层在翻译完成后异步触发，不阻塞实时字幕展示。
+     */
+    public List<SubtitleCorrectionPayload> reviewCorrections(String sessionId) {
+        TranslationSessionState state = sessions.get(sessionId);
+        if (state == null) {
+            return List.of();
+        }
+        List<TranslationContextItem> context = state.snapshot();
+        if (context.size() < 2) {
+            return List.of();
+        }
+        List<TranslationCorrection> suggestions = reviewWithFallback(context);
+        List<SubtitleCorrectionPayload> payloads = state.applyCorrections(suggestions);
+        state.correctionCount += payloads.size();
+        return payloads;
     }
 
     public void clear(String sessionId) {
@@ -97,6 +115,21 @@ public class TranslationService {
             }
         }
         throw new TranslationProviderUnavailableException("没有可用的翻译 Provider：" + reasons);
+    }
+
+    private List<TranslationCorrection> reviewWithFallback(List<TranslationContextItem> context) {
+        for (TranslationProvider provider : providers) {
+            TranslationProviderStatusPayload status = provider.status();
+            if (!status.available()) {
+                continue;
+            }
+            try {
+                return provider.review(context);
+            } catch (Exception ignored) {
+                // 单个 Provider 修正失败时尝试下一个。
+            }
+        }
+        return List.of();
     }
 
     private void appendReason(StringBuilder builder, String provider, String reason) {
