@@ -9,6 +9,8 @@ import com.moyu.flowsub.session.FlowSession;
 import com.moyu.flowsub.session.SessionService;
 import com.moyu.flowsub.subtitle.SubtitleCorrectionPayload;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
+import com.moyu.flowsub.summary.SummaryResult;
+import com.moyu.flowsub.summary.SummaryService;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -29,16 +31,19 @@ public class ArchiveService {
     private final QiniuService qiniuService;
     private final QiniuProperties qiniuProperties;
     private final ObjectMapper objectMapper;
+    private final SummaryService summaryService;
     private final Map<String, ArchiveState> archives = new ConcurrentHashMap<>();
 
     public ArchiveService(SessionService sessionService,
                           QiniuService qiniuService,
                           QiniuProperties qiniuProperties,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          SummaryService summaryService) {
         this.sessionService = sessionService;
         this.qiniuService = qiniuService;
         this.qiniuProperties = qiniuProperties;
         this.objectMapper = objectMapper;
+        this.summaryService = summaryService;
     }
 
     public void recordSubtitle(String sessionId, SubtitlePayload subtitle) {
@@ -68,13 +73,15 @@ public class ArchiveService {
             state.updatedAt = Instant.now();
             try {
                 ArchiveSnapshot snapshot = state.snapshot(session);
-                String summary = summaryMarkdown(snapshot, qiniuService.uploadReady());
-                Map<ArchiveResourceType, ResourceContent> contents = resourceContents(sessionId, snapshot, summary);
+                SummaryResult summary = summaryService.summarize(snapshot);
+                String summaryMarkdown = summaryService.toMarkdown(snapshot, summary, qiniuService.uploadReady());
+                Map<ArchiveResourceType, ResourceContent> contents = resourceContents(sessionId, snapshot, summaryMarkdown, summary);
                 List<ArchiveResourceResponse> resources = qiniuService.uploadReady()
                         ? uploadResources(sessionId, contents)
                         : localResources(sessionId, contents);
                 state.resources = resources;
-                state.summaryMarkdown = summary;
+                state.summaryMarkdown = summaryMarkdown;
+                state.summary = summary;
                 state.status = qiniuService.uploadReady() ? ArchiveStatus.UPLOADED : ArchiveStatus.LOCAL_ONLY;
                 state.message = qiniuService.uploadReady()
                         ? "会话资源已上传到七牛云 Kodo。"
@@ -113,7 +120,8 @@ public class ArchiveService {
 
     private Map<ArchiveResourceType, ResourceContent> resourceContents(String sessionId,
                                                                        ArchiveSnapshot snapshot,
-                                                                       String summary) throws Exception {
+                                                                       String summary,
+                                                                       SummaryResult insights) throws Exception {
         Map<ArchiveResourceType, ResourceContent> contents = new LinkedHashMap<>();
         contents.put(ArchiveResourceType.METADATA, json("metadata.json", snapshot));
         contents.put(ArchiveResourceType.SUBTITLES, json("subtitles.json", snapshot.subtitles()));
@@ -121,6 +129,7 @@ public class ArchiveService {
         contents.put(ArchiveResourceType.METRICS, json("metrics.json", snapshot.metrics()));
         contents.put(ArchiveResourceType.SUMMARY, new ResourceContent("summary.md", "text/markdown; charset=utf-8",
                 summary.getBytes(StandardCharsets.UTF_8)));
+        contents.put(ArchiveResourceType.INSIGHTS, json("insights.json", insights));
         contents.put(ArchiveResourceType.AUDIO, new ResourceContent("audio.pcm", "application/octet-stream",
                 state(sessionId).audioBytes()));
         return contents;
@@ -163,49 +172,6 @@ public class ArchiveService {
         return prefix.replaceAll("^/+", "").replaceAll("/+$", "");
     }
 
-    private String summaryMarkdown(ArchiveSnapshot snapshot, boolean uploadReady) {
-        FlowSession session = snapshot.session();
-        String audioState = snapshot.audioSizeBytes() > 0 ? snapshot.audioSizeBytes() + " bytes" : "NO_AUDIO";
-        String provider = snapshot.metrics() == null ? "未知" : snapshot.metrics().providerName();
-        String translationProvider = snapshot.metrics() == null ? "未知" : snapshot.metrics().translationProviderName();
-        return """
-                # %s
-
-                - 会话 ID：`%s`
-                - 场景：%s
-                - 语言：%s -> %s
-                - 会话状态：%s
-                - 字幕数：%d
-                - 修正数：%d
-                - 音频归档：%s
-                - ASR Provider：%s
-                - 翻译 Provider：%s
-                - Kodo 上传：%s
-
-                ## 资源清单
-
-                - `metadata.json`：会话元数据和归档快照
-                - `subtitles.json`：双语字幕
-                - `corrections.json`：上下文修正记录
-                - `metrics.json`：最后一次延迟指标
-                - `summary.md`：当前会后总结
-                - `audio.pcm`：原始 PCM 音频流
-                """.formatted(
-                session.getTitle(),
-                session.getSessionId(),
-                session.getSceneType(),
-                session.getSourceLang(),
-                session.getTargetLang(),
-                session.getStatus(),
-                snapshot.subtitleCount(),
-                snapshot.correctionCount(),
-                audioState,
-                provider,
-                translationProvider,
-                uploadReady ? "已启用" : "未启用，本地归档"
-        );
-    }
-
     private record ResourceContent(String filename, String contentType, byte[] data) {
     }
 
@@ -217,6 +183,7 @@ public class ArchiveService {
         private ArchiveStatus status = ArchiveStatus.PENDING;
         private String message = "等待会话结束后归档。";
         private String summaryMarkdown = "";
+        private SummaryResult summary = SummaryResult.empty("等待会话结束后生成会后总结。");
         private List<ArchiveResourceResponse> resources = List.of();
         private Instant updatedAt = Instant.now();
 
@@ -270,7 +237,7 @@ public class ArchiveService {
         }
 
         private synchronized ArchiveStatusResponse response(String sessionId) {
-            return new ArchiveStatusResponse(sessionId, status, message, summaryMarkdown, resources, updatedAt);
+            return new ArchiveStatusResponse(sessionId, status, message, summaryMarkdown, summary, resources, updatedAt);
         }
     }
 }

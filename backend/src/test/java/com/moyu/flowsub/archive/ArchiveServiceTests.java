@@ -10,9 +10,12 @@ import com.moyu.flowsub.session.CreateSessionRequest;
 import com.moyu.flowsub.session.SessionService;
 import com.moyu.flowsub.subtitle.SubtitleCorrectionPayload;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
+import com.moyu.flowsub.summary.MockSummaryProvider;
+import com.moyu.flowsub.summary.SummaryService;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,7 +25,7 @@ class ArchiveServiceTests {
     void shouldCreateLocalArchiveWhenKodoUnavailable() {
         SessionService sessionService = new SessionService();
         ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(false, false),
-                qiniuProperties(), objectMapper());
+                qiniuProperties(), objectMapper(), summaryService());
         String sessionId = createSession(sessionService);
 
         archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "Hello everyone.", "大家好。"));
@@ -38,12 +41,14 @@ class ArchiveServiceTests {
         assertThat(response.message()).contains("本地内存归档");
         assertThat(response.summaryMarkdown()).contains("字幕数：1");
         assertThat(response.summaryMarkdown()).contains("修正数：1");
-        assertThat(response.resources()).hasSize(6);
+        assertThat(response.summary()).isNotNull();
+        assertThat(response.summary().providerName()).isEqualTo("Mock 总结");
+        assertThat(response.resources()).hasSize(7);
         assertThat(response.resources())
                 .extracting(ArchiveResourceResponse::type)
                 .containsExactly(ArchiveResourceType.METADATA, ArchiveResourceType.SUBTITLES,
                         ArchiveResourceType.CORRECTIONS, ArchiveResourceType.METRICS,
-                        ArchiveResourceType.SUMMARY, ArchiveResourceType.AUDIO);
+                        ArchiveResourceType.SUMMARY, ArchiveResourceType.INSIGHTS, ArchiveResourceType.AUDIO);
         assertThat(response.resources())
                 .filteredOn(resource -> resource.type() == ArchiveResourceType.AUDIO)
                 .first()
@@ -55,7 +60,7 @@ class ArchiveServiceTests {
     void shouldAllowManualRetryWithoutBreakingExistingResources() {
         SessionService sessionService = new SessionService();
         ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(false, false),
-                qiniuProperties(), objectMapper());
+                qiniuProperties(), objectMapper(), summaryService());
         String sessionId = createSession(sessionService);
         archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "We are testing archive retry.", "我们正在测试归档重试。"));
 
@@ -64,7 +69,7 @@ class ArchiveServiceTests {
 
         assertThat(first.status()).isEqualTo(ArchiveStatus.LOCAL_ONLY);
         assertThat(second.status()).isEqualTo(ArchiveStatus.LOCAL_ONLY);
-        assertThat(second.resources()).hasSize(6);
+        assertThat(second.resources()).hasSize(7);
         assertThat(second.resources().get(0).key()).isEqualTo(first.resources().get(0).key());
         assertThat(second.summaryMarkdown()).contains("字幕数：1");
     }
@@ -73,7 +78,7 @@ class ArchiveServiceTests {
     void shouldReturnFailedStatusWhenKodoUploadFails() {
         SessionService sessionService = new SessionService();
         ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(true, true),
-                qiniuProperties(), objectMapper());
+                qiniuProperties(), objectMapper(), summaryService());
         String sessionId = createSession(sessionService);
         archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "Upload may fail.", "上传可能失败。"));
 
@@ -88,7 +93,7 @@ class ArchiveServiceTests {
     void shouldExposeUploadedResourcesWhenKodoReady() {
         SessionService sessionService = new SessionService();
         ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(true, false),
-                qiniuProperties(), objectMapper());
+                qiniuProperties(), objectMapper(), summaryService());
         String sessionId = createSession(sessionService);
         archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "Kodo stores session files.", "Kodo 保存会话文件。"));
 
@@ -96,8 +101,11 @@ class ArchiveServiceTests {
 
         assertThat(response.status()).isEqualTo(ArchiveStatus.UPLOADED);
         assertThat(response.message()).contains("七牛云 Kodo");
-        assertThat(response.resources()).hasSize(6);
+        assertThat(response.resources()).hasSize(7);
         assertThat(response.resources()).allMatch(resource -> resource.url().startsWith("https://kodo.example.com/"));
+        assertThat(response.resources())
+                .extracting(ArchiveResourceResponse::type)
+                .contains(ArchiveResourceType.INSIGHTS);
     }
 
     private String createSession(SessionService sessionService) {
@@ -115,6 +123,10 @@ class ArchiveServiceTests {
 
     private ObjectMapper objectMapper() {
         return new ObjectMapper().findAndRegisterModules();
+    }
+
+    private SummaryService summaryService() {
+        return new SummaryService(List.of(new MockSummaryProvider()));
     }
 
     private static class FakeQiniuService implements QiniuService {

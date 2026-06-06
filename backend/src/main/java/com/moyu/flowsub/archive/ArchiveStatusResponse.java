@@ -1,5 +1,7 @@
 package com.moyu.flowsub.archive;
 
+import com.moyu.flowsub.summary.SummaryResult;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -11,6 +13,7 @@ public record ArchiveStatusResponse(
         ArchiveStatus status,
         String message,
         String summaryMarkdown,
+        SummaryResult summary,
         List<ArchiveResourceResponse> resources,
         Instant updatedAt
 ) {
