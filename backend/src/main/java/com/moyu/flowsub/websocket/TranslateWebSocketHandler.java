@@ -43,30 +43,36 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
     private final AudioStreamService audioStreamService;
     private final TranslationService translationService;
     private final ArchiveService archiveService;
+    private final WebSocketMessageBus messageBus;
     private final ExecutorService executorService = Executors.newCachedThreadPool();
     // 用 WebSocket 会话编号标记推送状态，避免用户重复点击“开始模拟同传”导致多条任务并发推送。
     private final Map<String, AtomicBoolean> runningSessions = new java.util.concurrent.ConcurrentHashMap<>();
     // 每个音频二进制帧到达前，前端会先发一条元数据文本消息，这里按 WebSocket 会话暂存。
     private final Map<String, AudioChunkMeta> pendingAudioMetas = new java.util.concurrent.ConcurrentHashMap<>();
+    // 每个会话的字幕计数，用于控制上下文修正触发频率（每 N 条字幕触发一次异步修正）。
+    private final Map<String, Integer> sessionSubtitleCounts = new java.util.concurrent.ConcurrentHashMap<>();
 
     public TranslateWebSocketHandler(ObjectMapper objectMapper,
                                      SessionService sessionService,
                                      MockSubtitleProvider mockSubtitleProvider,
                                      AudioStreamService audioStreamService,
                                      TranslationService translationService,
-                                     ArchiveService archiveService) {
+                                     ArchiveService archiveService,
+                                     WebSocketMessageBus messageBus) {
         this.objectMapper = objectMapper;
         this.sessionService = sessionService;
         this.mockSubtitleProvider = mockSubtitleProvider;
         this.audioStreamService = audioStreamService;
         this.translationService = translationService;
         this.archiveService = archiveService;
+        this.messageBus = messageBus;
     }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         String sessionId = extractSessionId(session);
         runningSessions.put(session.getId(), new AtomicBoolean(false));
+        messageBus.register(sessionId, session);
         // 连接建立后立即回传确认消息，前端据此把连接状态更新为已连接。
         send(session, WsMessage.of("SESSION_CONNECTED", sessionId, Map.of()));
     }
@@ -159,8 +165,11 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
             running.set(false);
         }
         pendingAudioMetas.remove(session.getId());
-        audioStreamService.stop(extractSessionId(session));
-        translationService.clear(extractSessionId(session));
+        String sessionId = extractSessionId(session);
+        sessionSubtitleCounts.remove(sessionId);
+        messageBus.unregister(sessionId, session.getId());
+        audioStreamService.stop(sessionId);
+        translationService.clear(sessionId);
     }
 
     @Override
@@ -256,6 +265,24 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
                             audioResult.subtitleCount(), translation.totalCorrectionCount(), audioResult.chunkCount(),
                             audioResult.providerStatus().provider(), audioResult.providerStatus().fallback(),
                             translation.providerStatus().provider(), translation.providerStatus().fallback()))));
+
+            // 翻译完成后异步触发上下文修正，不阻塞当前字幕展示。
+            triggerCorrectionReview(session, sessionId);
+        });
+    }
+
+    private void triggerCorrectionReview(WebSocketSession session, String sessionId) {
+        int count = sessionSubtitleCounts.merge(sessionId, 1, Integer::sum);
+        // 每 3 条稳定字幕触发一次上下文修正，控制请求频率避免无谓消耗。
+        if (count < 3 || count % 3 != 0) {
+            return;
+        }
+        executorService.submit(() -> {
+            var corrections = translationService.reviewCorrections(sessionId);
+            for (var correction : corrections) {
+                archiveService.recordCorrection(sessionId, correction);
+                sendQuietly(session, WsMessage.of("SUBTITLE_CORRECTION", sessionId, correction));
+            }
         });
     }
 
