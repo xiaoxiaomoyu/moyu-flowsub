@@ -1,7 +1,10 @@
 package com.moyu.flowsub.session;
 
+import com.moyu.flowsub.archive.ArchiveService;
 import com.moyu.flowsub.common.ApiResponse;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,10 +18,14 @@ import java.util.List;
 @RequestMapping("/api/sessions")
 public class SessionController {
 
-    private final SessionService sessionService;
+    private static final Logger log = LoggerFactory.getLogger(SessionController.class);
 
-    public SessionController(SessionService sessionService) {
+    private final SessionService sessionService;
+    private final ArchiveService archiveService;
+
+    public SessionController(SessionService sessionService, ArchiveService archiveService) {
         this.sessionService = sessionService;
+        this.archiveService = archiveService;
     }
 
     /**
@@ -44,6 +51,13 @@ public class SessionController {
 
     @PostMapping("/{sessionId}/finish")
     public ApiResponse<FlowSession> finish(@PathVariable String sessionId) {
-        return ApiResponse.success(sessionService.finish(sessionId));
+        FlowSession session = sessionService.finish(sessionId);
+        try {
+            // 会话结束时自动尝试归档；归档失败不能影响“结束会话”这个主流程。
+            archiveService.archiveSession(sessionId);
+        } catch (Exception e) {
+            log.warn("会话结束后的自动归档失败，sessionId={}", sessionId, e);
+        }
+        return ApiResponse.success(session);
     }
 }
