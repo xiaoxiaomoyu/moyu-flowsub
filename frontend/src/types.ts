@@ -36,7 +36,14 @@ export interface QiniuStatus {
 
 export type ArchiveStatus = 'PENDING' | 'LOCAL_ONLY' | 'UPLOADING' | 'UPLOADED' | 'FAILED'
 
-export type ArchiveResourceType = 'METADATA' | 'SUBTITLES' | 'CORRECTIONS' | 'METRICS' | 'SUMMARY' | 'AUDIO'
+export type ArchiveResourceType =
+  | 'METADATA'
+  | 'SUBTITLES'
+  | 'CORRECTIONS'
+  | 'METRICS'
+  | 'SUMMARY'
+  | 'INSIGHTS'
+  | 'AUDIO'
 
 export interface ArchiveResource {
   type: ArchiveResourceType
@@ -47,11 +54,40 @@ export interface ArchiveResource {
   uploadedAt: string
 }
 
+export interface SummaryTimelineItem {
+  timeLabel: string
+  title: string
+  detail: string
+}
+
+export interface SummaryTerm {
+  term: string
+  translation: string
+  explanation: string
+}
+
+export interface SummaryKeySentence {
+  sourceText: string
+  translatedText: string
+  reason: string
+}
+
+export interface ArchiveSummary {
+  abstractText: string
+  timeline: SummaryTimelineItem[]
+  terms: SummaryTerm[]
+  keySentences: SummaryKeySentence[]
+  providerName: string
+  fallback: boolean
+  reason: string
+}
+
 export interface ArchiveStatusResponse {
   sessionId: string
   status: ArchiveStatus
   message: string
   summaryMarkdown: string
+  summary: ArchiveSummary
   resources: ArchiveResource[]
   updatedAt: string
 }
