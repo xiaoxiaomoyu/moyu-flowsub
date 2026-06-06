@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AudioControl from '../components/AudioControl.vue'
 import CorrectionPanel from '../components/CorrectionPanel.vue'
+import LiveStreamControl from '../components/LiveStreamControl.vue'
 import MetricsPanel from '../components/MetricsPanel.vue'
 import QiniuStatusCard from '../components/QiniuStatusCard.vue'
 import SubtitlePanel from '../components/SubtitlePanel.vue'
@@ -23,6 +24,7 @@ import SubtitlePanel from '../components/SubtitlePanel.vue'
     <section class="workspace">
       <aside class="left-column">
         <AudioControl />
+        <LiveStreamControl />
         <QiniuStatusCard />
       </aside>
       <section class="center-column">

@@ -88,7 +88,7 @@ onMounted(refreshAll)
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" min-width="220" />
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="290" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button
@@ -100,6 +100,9 @@ onMounted(refreshAll)
               </el-button>
               <RouterLink :to="{ path: '/summary', query: { sessionId: row.sessionId } }">
                 <el-button size="small" type="primary" plain>查看资源</el-button>
+              </RouterLink>
+              <RouterLink :to="{ path: '/playback', query: { sessionId: row.sessionId } }">
+                <el-button size="small" type="success" plain>回放</el-button>
               </RouterLink>
             </div>
           </template>
