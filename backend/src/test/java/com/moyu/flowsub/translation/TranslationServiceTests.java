@@ -17,7 +17,7 @@ class TranslationServiceTests {
     @Test
     void shouldFallbackToMockTranslationWhenDeepSeekUnavailable() {
         TranslationService translationService = new TranslationService(List.of(
-                new DeepSeekTranslationProvider(new DeepSeekProperties(false, "", "http://localhost", "deepseek-v4-pro", 1000), new ObjectMapper()),
+                new DeepSeekTranslationProvider(new DeepSeekProperties(false, "", "http://localhost", "deepseek-v4-flash", 1000, 0), new ObjectMapper()),
                 new MockTranslationProvider()
         ));
 
@@ -32,21 +32,16 @@ class TranslationServiceTests {
     }
 
     @Test
-    void shouldParseDeepSeekTranslationAndCorrections() throws Exception {
-        HttpServer server = startServer("""
-                {
-                  "choices": [
-                    {
-                      "message": {
-                        "content": "{\\"translatedText\\":\\"上下文窗口会帮助系统修正术语。\\",\\"corrections\\":[{\\"segmentId\\":\\"seg_000001\\",\\"newSourceText\\":\\"We use RAG to improve answers.\\",\\"newTranslatedText\\":\\"我们使用 RAG 来改进答案。\\",\\"reason\\":\\"修正技术术语 RAG。\\"}]}"
-                      }
-                    }
-                  ]
-                }
-                """);
+    void shouldStreamDeepSeekTranslation() throws Exception {
+        HttpServer server = startSseServer(List.of(
+                "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"上下文窗口会帮助系统\"}}]}",
+                "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"修正术语。\"}}]}",
+                "data: [DONE]"
+        ));
         try {
             DeepSeekTranslationProvider provider = new DeepSeekTranslationProvider(
-                    new DeepSeekProperties(true, "test-key", "http://127.0.0.1:" + server.getAddress().getPort(), "deepseek-v4-pro", 3000),
+                    new DeepSeekProperties(true, "test-key",
+                            "http://127.0.0.1:" + server.getAddress().getPort(), "deepseek-v4-flash", 3000, 0),
                     new ObjectMapper()
             );
 
@@ -58,8 +53,7 @@ class TranslationServiceTests {
             ));
 
             assertThat(result.translatedText()).isEqualTo("上下文窗口会帮助系统修正术语。");
-            assertThat(result.corrections()).hasSize(1);
-            assertThat(result.corrections().get(0).newTranslatedText()).contains("RAG");
+            assertThat(result.corrections()).isEmpty();
             assertThat(result.providerName()).isEqualTo("DeepSeek-V4-Pro");
         } finally {
             server.stop(0);
@@ -67,13 +61,13 @@ class TranslationServiceTests {
     }
 
     @Test
-    void shouldGenerateCorrectionPayloadFromProviderSuggestion() throws Exception {
-        HttpServer server = startServer("""
+    void shouldGenerateCorrectionViaReviewMethod() throws Exception {
+        HttpServer server = startReviewServer("""
                 {
                   "choices": [
                     {
                       "message": {
-                        "content": "{\\"translatedText\\":\\"后文会修正前面的字幕。\\",\\"corrections\\":[{\\"segmentId\\":\\"seg_000001\\",\\"newSourceText\\":\\"We use RAG.\\",\\"newTranslatedText\\":\\"我们使用 RAG。\\",\\"reason\\":\\"根据后文修正术语。\\"}]}"
+                        "content": "{\\"corrections\\":[{\\"segmentId\\":\\"seg_000001\\",\\"newSourceText\\":\\"We use RAG.\\",\\"newTranslatedText\\":\\"我们使用 RAG。\\",\\"reason\\":\\"根据后文修正术语。\\"}]}"
                       }
                     }
                   ]
@@ -82,27 +76,43 @@ class TranslationServiceTests {
         try {
             TranslationService translationService = new TranslationService(List.of(
                     new DeepSeekTranslationProvider(
-                            new DeepSeekProperties(true, "test-key", "http://127.0.0.1:" + server.getAddress().getPort(), "deepseek-v4-pro", 3000),
+                            new DeepSeekProperties(true, "test-key",
+                                    "http://127.0.0.1:" + server.getAddress().getPort(), "deepseek-v4-flash", 3000, 0),
                             new ObjectMapper()
                     ),
                     new MockTranslationProvider()
             ));
+            // 先构建两条翻译上下文，使用 Mock 翻译避免依赖外部服务。
             translationService.translateFinal("session_test",
                     new AsrResult("seg_000001", "We use rag.", "FINAL", 100, 1, "Mock ASR"));
-
-            TranslationProcessResult result = translationService.translateFinal("session_test",
+            translationService.translateFinal("session_test",
                     new AsrResult("seg_000002", "Later context fixes the previous subtitle.", "FINAL", 100, 2, "Mock ASR"));
 
-            assertThat(result.corrections()).hasSize(1);
-            assertThat(result.corrections().get(0).segmentId()).isEqualTo("seg_000001");
-            assertThat(result.corrections().get(0).newTranslatedText()).isEqualTo("我们使用 RAG。");
-            assertThat(result.totalCorrectionCount()).isEqualTo(1);
+            var corrections = translationService.reviewCorrections("session_test");
+
+            assertThat(corrections).hasSize(1);
+            assertThat(corrections.get(0).segmentId()).isEqualTo("seg_000001");
+            assertThat(corrections.get(0).newTranslatedText()).isEqualTo("我们使用 RAG。");
         } finally {
             server.stop(0);
         }
     }
 
-    private HttpServer startServer(String responseBody) throws IOException {
+    private HttpServer startSseServer(List<String> lines) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/chat/completions", exchange -> {
+            String body = String.join("\n\n", lines) + "\n\n";
+            byte[] response = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        return server;
+    }
+
+    private HttpServer startReviewServer(String responseBody) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/chat/completions", exchange -> {
             byte[] response = responseBody.getBytes(StandardCharsets.UTF_8);

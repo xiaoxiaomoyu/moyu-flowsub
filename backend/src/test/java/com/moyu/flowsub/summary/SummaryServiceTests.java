@@ -24,7 +24,7 @@ class SummaryServiceTests {
     @Test
     void shouldFallbackToMockSummaryWhenDeepSeekUnavailable() {
         SummaryService summaryService = new SummaryService(List.of(
-                new DeepSeekSummaryProvider(new DeepSeekProperties(false, "", "http://localhost", "deepseek-v4-pro", 1000),
+                new DeepSeekSummaryProvider(new DeepSeekProperties(false, "", "http://localhost", "deepseek-v4-flash", 1000, 0),
                         new ObjectMapper()),
                 new MockSummaryProvider()
         ));
@@ -53,7 +53,7 @@ class SummaryServiceTests {
         try {
             DeepSeekSummaryProvider provider = new DeepSeekSummaryProvider(
                     new DeepSeekProperties(true, "test-key",
-                            "http://127.0.0.1:" + server.getAddress().getPort(), "deepseek-v4-pro", 3000),
+                            "http://127.0.0.1:" + server.getAddress().getPort(), "deepseek-v4-flash", 3000, 0),
                     new ObjectMapper()
             );
 
