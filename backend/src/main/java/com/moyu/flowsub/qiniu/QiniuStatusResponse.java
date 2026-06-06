@@ -5,8 +5,12 @@ package com.moyu.flowsub.qiniu;
  */
 public record QiniuStatusResponse(
         boolean enabled,
+        boolean accessKeyConfigured,
+        boolean secretKeyConfigured,
         boolean bucketConfigured,
         boolean domainConfigured,
+        boolean uploadReady,
+        String archivePrefix,
         String message
 ) {
 }

@@ -5,4 +5,8 @@ package com.moyu.flowsub.qiniu;
  */
 public interface QiniuService {
     QiniuStatusResponse status();
+
+    boolean uploadReady();
+
+    KodoUploadResult upload(String key, byte[] data, String contentType);
 }

@@ -1,0 +1,148 @@
+package com.moyu.flowsub.archive;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moyu.flowsub.metrics.MetricsPayload;
+import com.moyu.flowsub.qiniu.KodoUploadResult;
+import com.moyu.flowsub.qiniu.QiniuProperties;
+import com.moyu.flowsub.qiniu.QiniuService;
+import com.moyu.flowsub.qiniu.QiniuStatusResponse;
+import com.moyu.flowsub.session.CreateSessionRequest;
+import com.moyu.flowsub.session.SessionService;
+import com.moyu.flowsub.subtitle.SubtitleCorrectionPayload;
+import com.moyu.flowsub.subtitle.SubtitlePayload;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ArchiveServiceTests {
+
+    @Test
+    void shouldCreateLocalArchiveWhenKodoUnavailable() {
+        SessionService sessionService = new SessionService();
+        ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(false, false),
+                qiniuProperties(), objectMapper());
+        String sessionId = createSession(sessionService);
+
+        archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "Hello everyone.", "大家好。"));
+        archiveService.recordCorrection(sessionId, new SubtitleCorrectionPayload("seg_000001",
+                "Hello every one.", "Hello everyone.", "大家每一个人好。", "大家好。", 2, "修正口语断句。"));
+        archiveService.recordMetrics(sessionId, new MetricsPayload(120, 300, 420, 1, 1, 3,
+                "Mock ASR", true, "Mock 翻译", true));
+        archiveService.appendAudio(sessionId, new byte[]{1, 2, 3, 4});
+
+        ArchiveStatusResponse response = archiveService.archiveSession(sessionId);
+
+        assertThat(response.status()).isEqualTo(ArchiveStatus.LOCAL_ONLY);
+        assertThat(response.message()).contains("本地内存归档");
+        assertThat(response.summaryMarkdown()).contains("字幕数：1");
+        assertThat(response.summaryMarkdown()).contains("修正数：1");
+        assertThat(response.resources()).hasSize(6);
+        assertThat(response.resources())
+                .extracting(ArchiveResourceResponse::type)
+                .containsExactly(ArchiveResourceType.METADATA, ArchiveResourceType.SUBTITLES,
+                        ArchiveResourceType.CORRECTIONS, ArchiveResourceType.METRICS,
+                        ArchiveResourceType.SUMMARY, ArchiveResourceType.AUDIO);
+        assertThat(response.resources())
+                .filteredOn(resource -> resource.type() == ArchiveResourceType.AUDIO)
+                .first()
+                .extracting(ArchiveResourceResponse::sizeBytes)
+                .isEqualTo(4L);
+    }
+
+    @Test
+    void shouldAllowManualRetryWithoutBreakingExistingResources() {
+        SessionService sessionService = new SessionService();
+        ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(false, false),
+                qiniuProperties(), objectMapper());
+        String sessionId = createSession(sessionService);
+        archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "We are testing archive retry.", "我们正在测试归档重试。"));
+
+        ArchiveStatusResponse first = archiveService.archiveSession(sessionId);
+        ArchiveStatusResponse second = archiveService.archiveSession(sessionId);
+
+        assertThat(first.status()).isEqualTo(ArchiveStatus.LOCAL_ONLY);
+        assertThat(second.status()).isEqualTo(ArchiveStatus.LOCAL_ONLY);
+        assertThat(second.resources()).hasSize(6);
+        assertThat(second.resources().get(0).key()).isEqualTo(first.resources().get(0).key());
+        assertThat(second.summaryMarkdown()).contains("字幕数：1");
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenKodoUploadFails() {
+        SessionService sessionService = new SessionService();
+        ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(true, true),
+                qiniuProperties(), objectMapper());
+        String sessionId = createSession(sessionService);
+        archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "Upload may fail.", "上传可能失败。"));
+
+        ArchiveStatusResponse response = archiveService.archiveSession(sessionId);
+
+        assertThat(response.status()).isEqualTo(ArchiveStatus.FAILED);
+        assertThat(response.message()).contains("模拟 Kodo 上传失败");
+        assertThat(response.resources()).isEmpty();
+    }
+
+    @Test
+    void shouldExposeUploadedResourcesWhenKodoReady() {
+        SessionService sessionService = new SessionService();
+        ArchiveService archiveService = new ArchiveService(sessionService, new FakeQiniuService(true, false),
+                qiniuProperties(), objectMapper());
+        String sessionId = createSession(sessionService);
+        archiveService.recordSubtitle(sessionId, subtitle("seg_000001", "Kodo stores session files.", "Kodo 保存会话文件。"));
+
+        ArchiveStatusResponse response = archiveService.archiveSession(sessionId);
+
+        assertThat(response.status()).isEqualTo(ArchiveStatus.UPLOADED);
+        assertThat(response.message()).contains("七牛云 Kodo");
+        assertThat(response.resources()).hasSize(6);
+        assertThat(response.resources()).allMatch(resource -> resource.url().startsWith("https://kodo.example.com/"));
+    }
+
+    private String createSession(SessionService sessionService) {
+        return sessionService.create(new CreateSessionRequest("归档测试", "en", "zh", "TECH_TALK")).getSessionId();
+    }
+
+    private SubtitlePayload subtitle(String segmentId, String sourceText, String translatedText) {
+        return new SubtitlePayload(segmentId, sourceText, translatedText, "FINAL", 1, false, 420);
+    }
+
+    private QiniuProperties qiniuProperties() {
+        return new QiniuProperties(true, "", "", "flowsub-test", "https://kodo.example.com",
+                "moyu-flowsub", false, 3600);
+    }
+
+    private ObjectMapper objectMapper() {
+        return new ObjectMapper().findAndRegisterModules();
+    }
+
+    private static class FakeQiniuService implements QiniuService {
+        private final boolean uploadReady;
+        private final boolean failUpload;
+
+        private FakeQiniuService(boolean uploadReady, boolean failUpload) {
+            this.uploadReady = uploadReady;
+            this.failUpload = failUpload;
+        }
+
+        @Override
+        public QiniuStatusResponse status() {
+            return new QiniuStatusResponse(uploadReady, uploadReady, uploadReady, uploadReady, true,
+                    uploadReady, "moyu-flowsub", uploadReady ? "测试上传已就绪。" : "测试上传未配置。");
+        }
+
+        @Override
+        public boolean uploadReady() {
+            return uploadReady;
+        }
+
+        @Override
+        public KodoUploadResult upload(String key, byte[] data, String contentType) {
+            if (failUpload) {
+                throw new IllegalStateException("模拟 Kodo 上传失败");
+            }
+            return new KodoUploadResult(key, "https://kodo.example.com/" + key, contentType, data.length, Instant.now());
+        }
+    }
+}

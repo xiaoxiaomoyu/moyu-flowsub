@@ -2,6 +2,7 @@ package com.moyu.flowsub.websocket;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moyu.flowsub.archive.ArchiveService;
 import com.moyu.flowsub.asr.AsrProviderStatusPayload;
 import com.moyu.flowsub.asr.AsrResult;
 import com.moyu.flowsub.audio.AudioChunkMeta;
@@ -41,6 +42,7 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
     private final MockSubtitleProvider mockSubtitleProvider;
     private final AudioStreamService audioStreamService;
     private final TranslationService translationService;
+    private final ArchiveService archiveService;
     private final ExecutorService executorService = Executors.newCachedThreadPool();
     // 用 WebSocket 会话编号标记推送状态，避免用户重复点击“开始模拟同传”导致多条任务并发推送。
     private final Map<String, AtomicBoolean> runningSessions = new java.util.concurrent.ConcurrentHashMap<>();
@@ -51,12 +53,14 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
                                      SessionService sessionService,
                                      MockSubtitleProvider mockSubtitleProvider,
                                      AudioStreamService audioStreamService,
-                                     TranslationService translationService) {
+                                     TranslationService translationService,
+                                     ArchiveService archiveService) {
         this.objectMapper = objectMapper;
         this.sessionService = sessionService;
         this.mockSubtitleProvider = mockSubtitleProvider;
         this.audioStreamService = audioStreamService;
         this.translationService = translationService;
+        this.archiveService = archiveService;
     }
 
     @Override
@@ -113,14 +117,15 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
         String sessionId = extractSessionId(session);
         byte[] data = new byte[message.getPayloadLength()];
         message.getPayload().get(data);
+        archiveService.appendAudio(sessionId, data);
         AudioStreamProcessResult result = audioStreamService.accept(sessionId, meta, data);
 
         sendQuietly(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, result.providerStatus()));
         if (result.asrResults().isEmpty()) {
             // 真实 ASR 可能需要几秒才返回文本，但音频块计数应实时更新，方便前端判断链路是否在工作。
             sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
-                    new MetricsPayload(0, 0, 0, result.subtitleCount(), 0,
-                            result.chunkCount(), result.providerStatus().provider(), result.providerStatus().fallback())));
+                    recordMetrics(sessionId, new MetricsPayload(0, 0, 0, result.subtitleCount(), 0,
+                            result.chunkCount(), result.providerStatus().provider(), result.providerStatus().fallback()))));
             return;
         }
         for (AsrResult asrResult : result.asrResults()) {
@@ -137,11 +142,12 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
                     false,
                     asrResult.latencyMs()
             );
+            archiveService.recordSubtitle(sessionId, payload);
             sendQuietly(session, WsMessage.of("ASR_PARTIAL", sessionId, payload));
             sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
-                    new MetricsPayload(asrResult.latencyMs(), 0, asrResult.latencyMs(),
+                    recordMetrics(sessionId, new MetricsPayload(asrResult.latencyMs(), 0, asrResult.latencyMs(),
                             result.subtitleCount(), 0, result.chunkCount(),
-                            result.providerStatus().provider(), result.providerStatus().fallback())));
+                            result.providerStatus().provider(), result.providerStatus().fallback()))));
         }
     }
 
@@ -201,19 +207,21 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
                 long totalLatency = mock.asrLatencyMs() + mock.translateLatencyMs();
                 SubtitlePayload subtitle = new SubtitlePayload(mock.segmentId(), mock.sourceText(), mock.translatedText(),
                         "FINAL", 1, false, totalLatency);
+                archiveService.recordSubtitle(sessionId, subtitle);
                 sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId, subtitle));
 
                 if (i == 3) {
                     // 第 4 条字幕后修正第 2 条字幕，模拟“后文到来后纠正历史结果”。
                     correctionCount = 1;
                     var correction = mockSubtitleProvider.correction();
+                    archiveService.recordCorrection(sessionId, correction);
                     sendQuietly(session, WsMessage.of("SUBTITLE_CORRECTION", sessionId, correction));
                 }
 
                 // 指标与字幕同步推送，前端可以实时观察链路延迟。
                 sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
-                        new MetricsPayload(mock.asrLatencyMs(), mock.translateLatencyMs(), totalLatency,
-                                i + 1, correctionCount)));
+                        recordMetrics(sessionId, new MetricsPayload(mock.asrLatencyMs(), mock.translateLatencyMs(), totalLatency,
+                                i + 1, correctionCount))));
                 sleepOneSecond();
             }
             running.set(false);
@@ -236,17 +244,24 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
         executorService.submit(() -> {
             TranslationProcessResult translation = translationService.translateFinal(sessionId, asrResult);
             sendQuietly(session, WsMessage.of("TRANSLATION_PROVIDER_STATUS", sessionId, translation.providerStatus()));
+            archiveService.recordSubtitle(sessionId, translation.subtitle());
             sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId, translation.subtitle()));
             for (var correction : translation.corrections()) {
+                archiveService.recordCorrection(sessionId, correction);
                 sendQuietly(session, WsMessage.of("SUBTITLE_CORRECTION", sessionId, correction));
             }
             long totalLatency = asrResult.latencyMs() + translation.translateLatencyMs();
             sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
-                    new MetricsPayload(asrResult.latencyMs(), translation.translateLatencyMs(), totalLatency,
+                    recordMetrics(sessionId, new MetricsPayload(asrResult.latencyMs(), translation.translateLatencyMs(), totalLatency,
                             audioResult.subtitleCount(), translation.totalCorrectionCount(), audioResult.chunkCount(),
                             audioResult.providerStatus().provider(), audioResult.providerStatus().fallback(),
-                            translation.providerStatus().provider(), translation.providerStatus().fallback())));
+                            translation.providerStatus().provider(), translation.providerStatus().fallback()))));
         });
+    }
+
+    private MetricsPayload recordMetrics(String sessionId, MetricsPayload metrics) {
+        archiveService.recordMetrics(sessionId, metrics);
+        return metrics;
     }
 
     private void sendQuietly(WebSocketSession session, WsMessage<?> message) {

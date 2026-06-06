@@ -11,6 +11,9 @@ qiniu:
   secret-key: ${QINIU_SECRET_KEY:}
   bucket: ${QINIU_BUCKET:}
   domain: ${QINIU_DOMAIN:}
+  archive-prefix: ${QINIU_ARCHIVE_PREFIX:moyu-flowsub}
+  private-bucket: ${QINIU_PRIVATE_BUCKET:false}
+  download-expire-seconds: ${QINIU_DOWNLOAD_EXPIRE_SECONDS:3600}
   ai:
     asr-enabled: ${QINIU_ASR_ENABLED:true}
     api-key: ${QINIU_AI_API_KEY:}

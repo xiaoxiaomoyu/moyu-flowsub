@@ -11,6 +11,9 @@ public record QiniuProperties(
         String accessKey,
         String secretKey,
         String bucket,
-        String domain
+        String domain,
+        String archivePrefix,
+        boolean privateBucket,
+        long downloadExpireSeconds
 ) {
 }
