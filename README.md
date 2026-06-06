@@ -1,6 +1,6 @@
 # MoYu FlowSub
 
-MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面向外语演讲、技术分享、国际会议和网课场景。当前 Demo 已跑通前后端工程、会话管理、WebSocket 实时通信、麦克风音频采集、七牛云智能语音/FunASR/Mock ASR 降级链路、DeepSeek 实时翻译、上下文修正、字幕展示、延迟指标和七牛云 Kodo 会话归档。
+MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面向外语演讲、技术分享、国际会议和网课场景。当前 Demo 已跑通前后端工程、会话管理、WebSocket 实时通信、麦克风音频采集、七牛云智能语音/FunASR/Mock ASR 降级链路、DeepSeek 实时翻译、上下文修正、字幕展示、延迟指标、七牛云 Kodo 会话归档和 AI 会后总结。
 
 ## 技术栈
 
@@ -9,7 +9,7 @@ MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面
 - 当前存储：内存存储
 - 音频采集：浏览器麦克风、AudioWorklet、PCM 音频切片、WebSocket Binary Frame
 - ASR 策略：七牛云智能语音实时 WebSocket 优先、FunASR 本地 WebSocket 兜底、Mock ASR 保底演示
-- 翻译策略：DeepSeek-V4-Pro 优先、Mock 翻译保底演示
+- 翻译与总结策略：DeepSeek-V4-Pro 优先、Mock 翻译和 Mock 总结保底演示
 - 云能力：七牛云 Kodo 会话归档、七牛云智能语音真实识别、DeepSeek-V4-Pro 真实翻译
 
 ## 当前阶段功能
@@ -32,9 +32,9 @@ MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面
 - 延迟指标实时更新
 - 会话结束后自动生成归档快照
 - 未配置 Kodo 时生成本地内存归档，配置完整时上传到七牛云 Kodo
-- 归档资源包含会话元数据、双语字幕、修正记录、指标快照、Markdown 总结和 PCM 音频
+- 归档资源包含会话元数据、双语字幕、修正记录、指标快照、Markdown 总结、结构化洞察和 PCM 音频
 - 历史会话页展示归档状态并支持手动重试归档
-- 会后总结页展示 Markdown 摘要和 Kodo 资源链接
+- 会后总结页展示中文摘要、时间线、术语表、重点句、Markdown 原文和 Kodo 资源链接
 - Demo 文档、API 文档、架构文档和 Docker 配置占位
 
 ## 本地启动
@@ -76,8 +76,8 @@ http://localhost:5173
 | `QINIU_ASR_ENABLED` | 是否启用七牛云智能语音真实识别，默认 `true` |
 | `QINIU_AI_API_KEY` | 七牛云 AI Token API Key，用于智能语音 Bearer 鉴权 |
 | `QINIU_ASR_WS_URL` | 七牛云智能语音 WebSocket 地址，默认 `wss://api.qnaigc.com/v1/voice/asr` |
-| `DEEPSEEK_ENABLED` | 是否启用 DeepSeek 真实翻译，默认 `false` |
-| `DEEPSEEK_API_KEY` | DeepSeek-V4-Pro 密钥，占位 |
+| `DEEPSEEK_ENABLED` | 是否启用 DeepSeek 真实翻译与会后总结，默认 `false` |
+| `DEEPSEEK_API_KEY` | DeepSeek-V4-Pro 密钥，占位，用于实时翻译和会后总结 |
 | `DEEPSEEK_BASE_URL` | OpenAI-compatible 接口地址，默认 `https://api.deepseek.com/v1` |
 | `DEEPSEEK_MODEL` | 默认 `deepseek-v4-pro` |
 | `DEEPSEEK_TIMEOUT_MS` | DeepSeek 调用超时，默认 `12000` |
@@ -110,7 +110,7 @@ FUNASR_WS_ENDPOINT=ws://localhost:10095
 
 不填写七牛云和 FunASR 配置时，系统会自动使用 `Mock ASR` 保底，保证 Demo 演示闭环。
 
-## 真实翻译配置
+## 真实翻译与会后总结配置
 
 DeepSeek-V4-Pro 优先：
 
@@ -122,7 +122,7 @@ DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_TIMEOUT_MS=12000
 ```
 
-DeepSeek 未配置或调用失败时，系统会自动使用 `Mock 翻译` 保底，并在页面指标中显示翻译链路已降级。
+DeepSeek 未配置或调用失败时，系统会自动使用 `Mock 翻译` 和 `Mock 总结` 保底，并在页面指标或会后总结页中显示降级原因。
 
 ## Kodo 归档配置
 
@@ -146,6 +146,7 @@ QINIU_DOWNLOAD_EXPIRE_SECONDS=3600
 {prefix}/{sessionId}/corrections.json
 {prefix}/{sessionId}/metrics.json
 {prefix}/{sessionId}/summary.md
+{prefix}/{sessionId}/insights.json
 {prefix}/{sessionId}/audio.pcm
 ```
 
@@ -155,7 +156,7 @@ QINIU_DOWNLOAD_EXPIRE_SECONDS=3600
 - `GET /api/archive/sessions/{sessionId}`：查询单个会话归档状态和资源列表
 - `GET /api/archive/sessions`：查询全部归档记录
 
-## 第五阶段验收清单
+## 第六阶段验收清单
 
 1. 启动后端，访问 `http://localhost:8080/api/health` 返回 `UP`。
 2. 启动前端，页面显示 `MoYu FlowSub` 标题。
@@ -172,11 +173,13 @@ QINIU_DOWNLOAD_EXPIRE_SECONDS=3600
 13. 点击“停止麦克风采集”后，浏览器麦克风占用释放。
 14. “模拟同传兜底”仍可展示第一阶段的双语字幕与修正效果。
 15. 点击“结束会话”，会话状态变为 `FINISHED`，WebSocket 断开，并自动触发归档。
-16. 未配置 Kodo 时，历史会话页显示“本地归档”，会后总结页显示 Markdown 摘要和本地资源列表。
+16. 未配置 Kodo 时，历史会话页显示“本地归档”，会后总结页显示 AI/Mock 摘要、时间线、术语表、重点句和本地资源列表。
 17. 配置 `QINIU_ACCESS_KEY`、`QINIU_SECRET_KEY`、`QINIU_BUCKET`、`QINIU_DOMAIN` 后，历史会话页显示“上传成功”，会后总结页显示 Kodo key/url。
-18. 访问 `http://localhost:8080/api/qiniu/status` 返回 Kodo 配置与上传能力状态。
+18. 会后总结页资源列表包含 `summary.md` 和 `insights.json`。
+19. 配置 `DEEPSEEK_ENABLED=true` 和 `DEEPSEEK_API_KEY` 后，会后总结 Provider 显示 `DeepSeek-V4-Pro`。
+20. 不配置 DeepSeek 时，会后总结 Provider 显示 `Mock 总结 · 已降级`，Demo 仍可跑通。
+21. 访问 `http://localhost:8080/api/qiniu/status` 返回 Kodo 配置与上传能力状态。
 
 ## 后续阶段计划
 
-- 第六阶段：把当前规则型 Markdown 总结升级为 AI 摘要、时间线、术语表和重点句，并继续保存到七牛云。
 - 第七阶段：进一步贴合七牛云音视频云能力，接入 Miku RTC 直播音频流，Miku 快直播音频源，音视频转码，视频点播 CDN，支持直播 / 会议回放，字幕文件与回放同步。
