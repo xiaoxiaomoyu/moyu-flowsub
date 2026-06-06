@@ -36,7 +36,10 @@ const resourceTypeText: Record<ArchiveResourceType, string> = {
   METRICS: '指标快照',
   SUMMARY: 'Markdown 总结',
   INSIGHTS: '结构化洞察',
-  AUDIO: 'PCM 音频'
+  AUDIO: 'PCM 音频',
+  AUDIO_WAV: 'WAV 音频',
+  SUBTITLES_VTT: 'WebVTT 字幕',
+  PLAYBACK_MANIFEST: '回放清单'
 }
 
 async function loadArchive() {

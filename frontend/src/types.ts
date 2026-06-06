@@ -44,6 +44,9 @@ export type ArchiveResourceType =
   | 'SUMMARY'
   | 'INSIGHTS'
   | 'AUDIO'
+  | 'AUDIO_WAV'
+  | 'SUBTITLES_VTT'
+  | 'PLAYBACK_MANIFEST'
 
 export interface ArchiveResource {
   type: ArchiveResourceType
@@ -153,6 +156,56 @@ export interface AudioStreamStarted {
 export interface AudioStreamStopped {
   chunkCount: number
   subtitleCount: number
+}
+
+export interface MediaStatus {
+  mikuEnabled: boolean
+  mikuConfigured: boolean
+  ffmpegConfigured: boolean
+  ffprobeConfigured: boolean
+  mockEnabled: boolean
+  apiHost: string
+  region: string
+  message: string
+}
+
+export type LiveIngestStatus = 'IDLE' | 'PREPARED' | 'INGESTING' | 'STOPPED' | 'FAILED' | 'MOCK'
+
+export interface LiveStreamStatus {
+  sessionId: string
+  streamName: string
+  publishUrl: string
+  playUrl: string
+  whepUrl: string
+  ingestStatus: LiveIngestStatus
+  provider: string
+  fallback: boolean
+  reason: string
+  startedAt?: string
+  updatedAt: string
+}
+
+export interface PlaybackCue {
+  segmentId: string
+  startSeconds: number
+  endSeconds: number
+  sourceText: string
+  translatedText: string
+  corrected: boolean
+}
+
+export interface PlaybackManifest {
+  sessionId: string
+  session: FlowSession
+  audioUrl: string
+  subtitleUrl: string
+  cues: PlaybackCue[]
+  corrections: SubtitleCorrection[]
+  summary: ArchiveSummary
+  resources: ArchiveResource[]
+  provider: string
+  fallback: boolean
+  message: string
 }
 
 export interface WsMessage<T = unknown> {
