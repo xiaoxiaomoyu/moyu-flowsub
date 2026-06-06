@@ -37,3 +37,4 @@ logs/
 # Claude
 .claude/
 .firecrawl/
+CLAUDE.md

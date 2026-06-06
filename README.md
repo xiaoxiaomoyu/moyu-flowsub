@@ -1,6 +1,6 @@
 # MoYu FlowSub
 
-MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面向外语演讲、技术分享、国际会议和网课场景。当前 Demo 已跑通前后端工程、会话管理、WebSocket 实时通信、麦克风音频采集、七牛云智能语音/FunASR/Mock ASR 降级链路、DeepSeek 实时翻译、上下文修正、字幕展示、延迟指标、七牛云 Kodo 会话归档和 AI 会后总结。
+MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面向外语演讲、技术分享、国际会议和网课场景。当前 Demo 已跑通前后端工程、会话管理、WebSocket 实时通信、麦克风音频采集、七牛云智能语音/FunASR/Mock ASR 降级链路、DeepSeek 实时翻译、上下文修正、字幕展示、延迟指标、七牛云 Kodo 会话归档、AI 会后总结、Miku 快直播拉流和会话回放同步。
 
 ## 技术栈
 
@@ -8,9 +8,10 @@ MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面
 - 前端：Vue 3、Vite、TypeScript、Element Plus、Pinia、Vue Router、原生 WebSocket
 - 当前存储：内存存储
 - 音频采集：浏览器麦克风、AudioWorklet、PCM 音频切片、WebSocket Binary Frame
+- 直播拉流：七牛云 Miku 快直播地址、FFmpeg 后端拉流、PCM 转写入 ASR
 - ASR 策略：七牛云智能语音实时 WebSocket 优先、FunASR 本地 WebSocket 兜底、Mock ASR 保底演示
 - 翻译与总结策略：DeepSeek-V4-Pro 优先、Mock 翻译和 Mock 总结保底演示
-- 云能力：七牛云 Kodo 会话归档、七牛云智能语音真实识别、DeepSeek-V4-Pro 真实翻译
+- 云能力：七牛云 Kodo 会话归档、七牛云智能语音真实识别、Miku 快直播、DeepSeek-V4-Pro 真实翻译
 
 ## 当前阶段功能
 
@@ -18,6 +19,7 @@ MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面
 - 会话创建、查询、列表、结束
 - `/ws/translate/{sessionId}` WebSocket 实时通信
 - 浏览器麦克风权限申请与音频采集
+- Miku 快直播推流/播放地址生成和后端 FFmpeg 拉流
 - AudioWorklet 将音频切成 PCM 小块并上传到后端
 - 后端接收 WebSocket 二进制音频帧并做内存缓存
 - ASR Provider 会话级流式适配层与降级状态展示
@@ -32,9 +34,10 @@ MoYu FlowSub 是一款基于七牛云的 AI 实时双语同传字幕助手，面
 - 延迟指标实时更新
 - 会话结束后自动生成归档快照
 - 未配置 Kodo 时生成本地内存归档，配置完整时上传到七牛云 Kodo
-- 归档资源包含会话元数据、双语字幕、修正记录、指标快照、Markdown 总结、结构化洞察和 PCM 音频
+- 归档资源包含会话元数据、双语字幕、修正记录、指标快照、Markdown 总结、结构化洞察、PCM 音频、WAV 音频、WebVTT 字幕和回放清单
 - 历史会话页展示归档状态并支持手动重试归档
 - 会后总结页展示中文摘要、时间线、术语表、重点句、Markdown 原文和 Kodo 资源链接
+- 会话回放页支持音频播放时同步高亮双语字幕
 - Demo 文档、API 文档、架构文档和 Docker 配置占位
 
 ## 本地启动
@@ -79,7 +82,7 @@ http://localhost:5173
 | `DEEPSEEK_ENABLED` | 是否启用 DeepSeek 真实翻译与会后总结，默认 `false` |
 | `DEEPSEEK_API_KEY` | DeepSeek-V4-Pro 密钥，占位，用于实时翻译和会后总结 |
 | `DEEPSEEK_BASE_URL` | OpenAI-compatible 接口地址，默认 `https://api.deepseek.com/v1` |
-| `DEEPSEEK_MODEL` | 默认 `deepseek-v4-pro` |
+| `DEEPSEEK_MODEL` | 默认 `deepseek-v4-flash` |
 | `DEEPSEEK_TIMEOUT_MS` | DeepSeek 调用超时，默认 `12000` |
 | `ASR_MOCK_ENABLED` | 是否启用 Mock ASR 保底，默认 `true` |
 | `FUNASR_ENABLED` | 是否启用 FunASR 本地兜底，默认 `false`，需要本地服务启动后再开启 |
@@ -88,6 +91,16 @@ http://localhost:5173
 | `AUDIO_CHUNK_DURATION_MS` | 后端音频切片建议间隔，默认 `300` |
 | `VITE_WS_BASE_URL` | 前端 WebSocket 地址覆盖项，例如 `ws://localhost:8080` |
 | `VITE_AUDIO_CHUNK_DURATION_MS` | 前端 AudioWorklet 切片间隔，默认 `300` |
+| `MIKU_ENABLED` | 是否启用 Miku 快直播地址生成，默认 `false` |
+| `MIKU_API_HOST` | Miku 管理 API Host，默认 `https://mls.cn-east-1.qiniumiku.com` |
+| `MIKU_REGION` | Miku 区域，默认 `cn-east-1` |
+| `MIKU_PUBLISH_DOMAIN` | Miku 推流域名，用于生成 RTMP 推流地址 |
+| `MIKU_PLAY_DOMAIN` | Miku 播放域名，用于 FFmpeg 拉取 HLS 音频 |
+| `MIKU_WHEP_DOMAIN` | Miku WHEP 域名，占位用于低延时播放 |
+| `MIKU_STREAM_PREFIX` | 直播流名前缀，默认 `moyu-flowsub` |
+| `FFMPEG_PATH` | FFmpeg 可执行文件路径，默认使用 PATH 中的 `ffmpeg` |
+| `FFPROBE_PATH` | FFprobe 可执行文件路径，默认使用 PATH 中的 `ffprobe` |
+| `MEDIA_MOCK_ENABLED` | Miku/FFmpeg 不可用时是否使用 Mock 直播源保底，默认 `true` |
 
 ## 真实识别配置
 
@@ -118,7 +131,7 @@ DeepSeek-V4-Pro 优先：
 DEEPSEEK_ENABLED=true
 DEEPSEEK_API_KEY=你的 DeepSeek API Key
 DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-DEEPSEEK_MODEL=deepseek-v4-pro
+DEEPSEEK_MODEL=deepseek-v4-flash
 DEEPSEEK_TIMEOUT_MS=12000
 ```
 
@@ -148,6 +161,9 @@ QINIU_DOWNLOAD_EXPIRE_SECONDS=3600
 {prefix}/{sessionId}/summary.md
 {prefix}/{sessionId}/insights.json
 {prefix}/{sessionId}/audio.pcm
+{prefix}/{sessionId}/audio.wav
+{prefix}/{sessionId}/subtitles.vtt
+{prefix}/{sessionId}/playback-manifest.json
 ```
 
 归档接口：
@@ -156,7 +172,30 @@ QINIU_DOWNLOAD_EXPIRE_SECONDS=3600
 - `GET /api/archive/sessions/{sessionId}`：查询单个会话归档状态和资源列表
 - `GET /api/archive/sessions`：查询全部归档记录
 
-## 第六阶段验收清单
+## Miku 直播与回放配置
+
+第七阶段支持后端用 FFmpeg 从 Miku 播放地址拉取直播音频，并转为 16k 单声道 PCM 送入现有 ASR/翻译链路。未配置 Miku 或 FFmpeg 不可用时，会自动使用 Mock 直播源演示完整链路。
+
+```env
+MIKU_ENABLED=true
+MIKU_PUBLISH_DOMAIN=你的 Miku 推流域名
+MIKU_PLAY_DOMAIN=你的 Miku 播放域名
+MIKU_WHEP_DOMAIN=你的 Miku WHEP 域名
+FFMPEG_PATH=ffmpeg
+FFPROBE_PATH=ffprobe
+MEDIA_MOCK_ENABLED=true
+```
+
+媒体接口：
+
+- `GET /api/media/status`：查询 Miku 和 FFmpeg 状态
+- `POST /api/media/live/sessions/{sessionId}/prepare`：准备直播源并生成推流/播放地址
+- `GET /api/media/live/sessions/{sessionId}`：查询直播源状态
+- `POST /api/media/live/sessions/{sessionId}/start-ingest`：启动后端 FFmpeg 拉流或 Mock 直播源
+- `POST /api/media/live/sessions/{sessionId}/stop-ingest`：停止后端拉流
+- `GET /api/playback/sessions/{sessionId}`：查询会话回放清单
+
+## 第七阶段验收清单
 
 1. 启动后端，访问 `http://localhost:8080/api/health` 返回 `UP`。
 2. 启动前端，页面显示 `MoYu FlowSub` 标题。
@@ -179,7 +218,13 @@ QINIU_DOWNLOAD_EXPIRE_SECONDS=3600
 19. 配置 `DEEPSEEK_ENABLED=true` 和 `DEEPSEEK_API_KEY` 后，会后总结 Provider 显示 `DeepSeek-V4-Pro`。
 20. 不配置 DeepSeek 时，会后总结 Provider 显示 `Mock 总结 · 已降级`，Demo 仍可跑通。
 21. 访问 `http://localhost:8080/api/qiniu/status` 返回 Kodo 配置与上传能力状态。
+22. 实时同传页“直播源”卡片显示 Miku/FFmpeg 配置状态。
+23. 点击“准备直播”后显示推流地址、播放地址和 WHEP 地址。
+24. 点击“开始后端拉流”后，配置完整时显示 `Miku 快直播 + FFmpeg`，未配置时显示 `Mock 直播源`。
+25. 后端拉流或 Mock 直播源运行时，字幕流和指标持续更新。
+26. 结束会话并归档后，资源列表包含 `audio.wav`、`subtitles.vtt`、`playback-manifest.json`。
+27. 从历史会话点击“回放”，音频播放时双语字幕按时间高亮。
 
 ## 后续阶段计划
 
-- 第七阶段：进一步贴合七牛云音视频云能力，接入 Miku RTC 直播音频流，Miku 快直播音频源，音视频转码，视频点播 CDN，支持直播 / 会议回放，字幕文件与回放同步。
+- 后续阶段：接入数据库持久化、完善七牛云智能语音/FunASR 真实识别稳定性，并进一步扩展视频点播 CDN 和直播回放同步能力。
