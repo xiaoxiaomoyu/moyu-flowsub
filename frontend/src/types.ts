@@ -25,9 +25,35 @@ export interface CreateSessionRequest {
 
 export interface QiniuStatus {
   enabled: boolean
+  accessKeyConfigured: boolean
+  secretKeyConfigured: boolean
   bucketConfigured: boolean
   domainConfigured: boolean
+  uploadReady: boolean
+  archivePrefix: string
   message: string
+}
+
+export type ArchiveStatus = 'PENDING' | 'LOCAL_ONLY' | 'UPLOADING' | 'UPLOADED' | 'FAILED'
+
+export type ArchiveResourceType = 'METADATA' | 'SUBTITLES' | 'CORRECTIONS' | 'METRICS' | 'SUMMARY' | 'AUDIO'
+
+export interface ArchiveResource {
+  type: ArchiveResourceType
+  key: string
+  url: string
+  contentType: string
+  sizeBytes: number
+  uploadedAt: string
+}
+
+export interface ArchiveStatusResponse {
+  sessionId: string
+  status: ArchiveStatus
+  message: string
+  summaryMarkdown: string
+  resources: ArchiveResource[]
+  updatedAt: string
 }
 
 export interface SubtitleSegment {
