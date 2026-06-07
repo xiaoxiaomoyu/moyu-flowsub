@@ -252,6 +252,8 @@ public class QwenTranslationProvider implements TranslationProvider {
         try {
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                String errorBody = response.body() == null ? "" : response.body().substring(0, Math.min(300, response.body().length()));
+                log.warn("Qwen 修正 API 返回非 2xx，status={}，body={}", response.statusCode(), errorBody);
                 return List.of();
             }
             String content = objectMapper.readTree(response.body())
@@ -261,10 +263,14 @@ public class QwenTranslationProvider implements TranslationProvider {
                     .path("content")
                     .asText("");
             if (!StringUtils.hasText(content)) {
+                log.warn("Qwen 修正 API 返回内容为空，body={}",
+                        response.body() == null ? "" : response.body().substring(0, Math.min(300, response.body().length())));
                 return List.of();
             }
+            log.info("Qwen 修正 API 返回 content 长度={}", content.length());
             return parseCorrections(content);
         } catch (Exception e) {
+            log.warn("Qwen 修正 API 调用失败：{}", e.getMessage());
             return List.of();
         }
     }
@@ -336,7 +342,9 @@ public class QwenTranslationProvider implements TranslationProvider {
                 ));
             }
             return corrections;
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            log.warn("Qwen 修正结果 JSON 解析失败：{}，content={}", e.getMessage(),
+                    content.length() > 300 ? content.substring(0, 300) : content);
             return List.of();
         }
     }

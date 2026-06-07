@@ -152,15 +152,22 @@ public class TranslationService {
     public List<SubtitleCorrectionPayload> reviewCorrections(String sessionId) {
         TranslationSessionState state = sessions.get(sessionId);
         if (state == null) {
+            log.debug("reviewCorrections: sessionState 为 null，sessionId={}", sessionId);
             return List.of();
         }
         List<TranslationContextItem> context = state.snapshot();
         if (context.size() < 2) {
+            log.debug("reviewCorrections: 上下文不足 ({}<2)，sessionId={}", context.size(), sessionId);
             return List.of();
         }
+        log.info("触发上下文修正 review，sessionId={}，contextSize={}", sessionId, context.size());
         List<TranslationCorrection> suggestions = review(context);
+        log.info("review 返回 {} 条修正建议，sessionId={}", suggestions.size(), sessionId);
         List<SubtitleCorrectionPayload> payloads = state.applyCorrections(suggestions);
         state.correctionCount += payloads.size();
+        if (!payloads.isEmpty()) {
+            log.info("上下文修正已应用 {} 条，sessionId={}", payloads.size(), sessionId);
+        }
         return payloads;
     }
 
@@ -206,7 +213,8 @@ public class TranslationService {
             }
             try {
                 return provider.review(context);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.warn("{} 上下文修正调用失败：{}", status.provider(), e.getMessage());
             }
         }
         return List.of();
