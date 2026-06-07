@@ -15,12 +15,13 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 @Service
 public class TranslationService {
 
     private static final Logger log = LoggerFactory.getLogger(TranslationService.class);
-    private static final int MAX_CONTEXT_SIZE = 3;
+    private static final int MAX_CONTEXT_SIZE = 2;
     private static final int MAX_CORRECTION_SIZE = 2;
 
     private final List<TranslationProvider> providers;
@@ -78,6 +79,76 @@ public class TranslationService {
         );
     }
 
+    /**
+     * 流式翻译：每收到一个 token 时通过 onPartial 推送携带当前累积译文的 SubtitlePayload，
+     * 翻译完成后通过 onComplete 推送最终字幕、Provider 状态和指标。
+     */
+    public void translateFinalStreaming(String sessionId, AsrResult asrResult,
+                                        Consumer<SubtitlePayload> onPartial,
+                                        Consumer<TranslationProcessResult> onComplete) {
+        TranslationSessionState state = sessions.computeIfAbsent(sessionId, ignored -> new TranslationSessionState());
+        List<TranslationContextItem> context = state.snapshot();
+        TranslationRequest request = new TranslationRequest(
+                sessionId,
+                asrResult.segmentId(),
+                asrResult.text(),
+                context
+        );
+
+        long start = System.currentTimeMillis();
+        String finalText;
+        try {
+            finalText = translateStreaming(request, (partial) -> {
+                onPartial.accept(new SubtitlePayload(
+                        asrResult.segmentId(),
+                        asrResult.text(),
+                        partial,
+                        "TRANSLATING",
+                        0,
+                        false,
+                        asrResult.latencyMs() + (System.currentTimeMillis() - start)
+                ));
+            });
+        } catch (Exception e) {
+            log.warn("流式翻译失败，sessionId={}，segmentId={}：{}",
+                    sessionId, asrResult.segmentId(), e.getMessage());
+            onComplete.accept(new TranslationProcessResult(
+                    new SubtitlePayload(asrResult.segmentId(), asrResult.text(),
+                            "翻译失败: " + e.getMessage(), "ERROR", 0, false, asrResult.latencyMs()),
+                    List.of(),
+                    new TranslationProviderStatusPayload("Qwen 翻译", false, false,
+                            "翻译失败: " + e.getMessage(), "请检查 Qwen API 配置。"),
+                    0, state.correctionCount
+            ));
+            return;
+        }
+
+        long translateLatency = Math.max(1, System.currentTimeMillis() - start);
+        SubtitlePayload subtitle = new SubtitlePayload(
+                asrResult.segmentId(),
+                asrResult.text(),
+                finalText,
+                "FINAL",
+                1,
+                false,
+                asrResult.latencyMs() + translateLatency
+        );
+        state.remember(new TranslationContextItem(
+                asrResult.segmentId(),
+                asrResult.text(),
+                finalText,
+                1
+        ));
+        onComplete.accept(new TranslationProcessResult(
+                subtitle,
+                List.of(),
+                new TranslationProviderStatusPayload("Qwen 翻译", true, false,
+                        "Qwen 流式翻译完成。", "真实翻译链路正常。"),
+                translateLatency,
+                state.correctionCount
+        ));
+    }
+
     public List<SubtitleCorrectionPayload> reviewCorrections(String sessionId) {
         TranslationSessionState state = sessions.get(sessionId);
         if (state == null) {
@@ -95,6 +166,21 @@ public class TranslationService {
 
     public void clear(String sessionId) {
         sessions.remove(sessionId);
+    }
+
+    private String translateStreaming(TranslationRequest request, Consumer<String> onToken) {
+        for (TranslationProvider provider : providers) {
+            TranslationProviderStatusPayload status = provider.status();
+            if (!status.available()) {
+                continue;
+            }
+            try {
+                return provider.translateStreaming(request, onToken);
+            } catch (Exception e) {
+                log.warn("{} 流式翻译失败：{}", status.provider(), e.getMessage());
+            }
+        }
+        throw new TranslationProviderUnavailableException("没有可用的翻译 Provider，请配置 Qwen DashScope API Key。");
     }
 
     private TranslationResult translate(TranslationRequest request) {

@@ -8,14 +8,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 @Component
 public class QwenTranslationProvider implements TranslationProvider {
@@ -75,7 +80,7 @@ public class QwenTranslationProvider implements TranslationProvider {
         }
 
         long start = System.currentTimeMillis();
-        String model = StringUtils.hasText(properties.translationModel()) ? properties.translationModel() : "qwen-plus";
+        String model = StringUtils.hasText(properties.translationModel()) ? properties.translationModel() : "qwen-turbo";
         String requestBody = objectMapper.writeValueAsString(Map.of(
                 "model", model,
                 "temperature", properties.temperature(),
@@ -101,7 +106,7 @@ public class QwenTranslationProvider implements TranslationProvider {
         }
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            log.warn("Qwen 翻译返回非 2xx 状态码：{}，body={}", response.statusCode(),
+            log.warn("Qwen 翻译返回非 2xx 状态码：{}", response.statusCode(),
                     response.body() == null ? "" : response.body().substring(0, Math.min(500, response.body().length())));
             throw new TranslationProviderUnavailableException("Qwen 调用失败，HTTP " + response.statusCode());
         }
@@ -116,8 +121,7 @@ public class QwenTranslationProvider implements TranslationProvider {
         }
 
         if (!StringUtils.hasText(translatedText)) {
-            log.warn("Qwen 翻译返回内容为空，body={}",
-                    response.body() == null ? "" : response.body().substring(0, Math.min(500, response.body().length())));
+            log.warn("Qwen 翻译返回内容为空");
             throw new TranslationProviderUnavailableException("Qwen 翻译返回内容为空。");
         }
 
@@ -136,12 +140,98 @@ public class QwenTranslationProvider implements TranslationProvider {
     }
 
     @Override
+    public String translateStreaming(TranslationRequest request, Consumer<String> onToken) throws Exception {
+        if (!status().available()) {
+            throw new TranslationProviderUnavailableException("Qwen 配置不完整。");
+        }
+
+        long start = System.currentTimeMillis();
+        String model = StringUtils.hasText(properties.translationModel()) ? properties.translationModel() : "qwen-turbo";
+        String requestBody = objectMapper.writeValueAsString(Map.of(
+                "model", model,
+                "temperature", properties.temperature(),
+                "stream", true,
+                "messages", List.of(
+                        Map.of("role", "system", "content", TRANSLATION_SYSTEM_PROMPT),
+                        Map.of("role", "user", "content", buildTranslationUserPrompt(request))
+                )
+        ));
+
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create(chatCompletionsUrl()))
+                .timeout(Duration.ofMillis(Math.max(15000, properties.timeoutMs())))
+                .header("Authorization", "Bearer " + properties.apiKey())
+                .header("Content-Type", "application/json")
+                .header("Accept", "text/event-stream")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+
+        HttpResponse<InputStream> response;
+        try {
+            response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (Exception e) {
+            log.warn("Qwen 流式翻译 HTTP 请求失败：{}", e.getMessage());
+            throw new TranslationProviderUnavailableException("Qwen 流式调用失败：" + e.getMessage(), e);
+        }
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            log.warn("Qwen 流式翻译返回非 2xx 状态码：{}", response.statusCode());
+            throw new TranslationProviderUnavailableException("Qwen 流式调用失败，HTTP " + response.statusCode());
+        }
+
+        StringBuilder fullText = new StringBuilder();
+        try (InputStream is = response.body();
+             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isEmpty() || line.startsWith(":")) {
+                    continue;
+                }
+                if (line.equals("data: [DONE]")) {
+                    break;
+                }
+                if (line.startsWith("data: ")) {
+                    String json = line.substring(6);
+                    try {
+                        JsonNode root = objectMapper.readTree(json);
+                        JsonNode choices = root.path("choices");
+                        if (choices.isArray() && choices.size() > 0) {
+                            JsonNode delta = choices.get(0).path("delta");
+                            String content = delta.path("content").asText("");
+                            if (!content.isEmpty()) {
+                                fullText.append(content);
+                                onToken.accept(fullText.toString());
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.debug("SSE 解析跳过：{}", line);
+                    }
+                }
+            }
+        }
+
+        String finalText = fullText.toString().trim();
+        if (!StringUtils.hasText(finalText)) {
+            log.warn("Qwen 流式翻译返回内容为空");
+            throw new TranslationProviderUnavailableException("Qwen 流式翻译返回内容为空。");
+        }
+
+        log.info("Qwen 流式翻译完成，耗时 {}ms，原文={}，译文={}",
+                System.currentTimeMillis() - start,
+                request.sourceText().length() > 50 ? request.sourceText().substring(0, 50) + "..." : request.sourceText(),
+                finalText.length() > 50 ? finalText.substring(0, 50) + "..." : finalText);
+
+        return finalText;
+    }
+
+    @Override
     public List<TranslationCorrection> review(List<TranslationContextItem> recentContext) throws Exception {
         if (!status().available() || recentContext.size() < 2) {
             return List.of();
         }
 
-        String model = StringUtils.hasText(properties.translationModel()) ? properties.translationModel() : "qwen-plus";
+        String model = StringUtils.hasText(properties.correctionModel()) ? properties.correctionModel()
+                : StringUtils.hasText(properties.translationModel()) ? properties.translationModel() : "qwen-plus";
         String requestBody = objectMapper.writeValueAsString(Map.of(
                 "model", model,
                 "temperature", 0,
