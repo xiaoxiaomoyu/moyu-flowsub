@@ -1,13 +1,27 @@
-# MoYu FlowSub
+# 🎙️ MoYu FlowSub
 
 基于 Qwen + 七牛云的 AI 实时双语同传字幕助手，面向外语演讲、技术分享、国际会议和网课场景。
 
-## 演示视频路径
+## 📊 语言分布
 
-[MoYu FlowSub 演示视频](https://www.bilibili.com/)
-暂时还没有上传，后续会上传。
+![Top Languages](https://img.shields.io/github/languages/top/xiaoxiaomoyu/moyu-flowsub)
+![Language Count](https://img.shields.io/github/languages/count/xiaoxiaomoyu/moyu-flowsub)
 
-## 功能概览
+| 语言 | 占比 |
+| --- | --- |
+| Java | 68.4% |
+| Vue | 16.3% |
+| TypeScript | 10.0% |
+| CSS | 4.4% |
+| JavaScript | 0.6% |
+| Dockerfile | 0.2% |
+| HTML | 0.1% |
+
+## 🎬 演示视频路径
+
+[MoYu FlowSub 演示视频](https://b23.tv/6437yle)，视频已经发布啦！管快去看看吧！
+
+## ✨ 功能概览
 
 - 浏览器麦克风/系统音频采集，AudioWorklet PCM 切片
 - Qwen ASR Realtime 语音识别
@@ -19,7 +33,7 @@
 - 浮窗字幕（独立窗口，跨窗口同步）
 - Docker 一键部署
 
-## 技术栈
+## 🛠️ 技术栈
 
 | 层级 | 技术 |
 | --- | --- |
@@ -29,7 +43,7 @@
 | 翻译/总结 | Qwen/DashScope Chat API |
 | 存储 | 内存（运行时）+ 七牛云 Kodo（归档）|
 
-## 快速开始
+## 🚀 快速开始
 
 ### Docker Compose（推荐）
 
@@ -41,7 +55,7 @@ docker compose up -d
 
 访问 `http://localhost:5173`。
 
-### 本地开发
+### 💻 本地开发
 
 **后端**（需要 Java 17）：
 
@@ -60,7 +74,7 @@ npm run dev
 
 浏览器打开 `http://localhost:5173`，前端自动代理 `/api` 到 `localhost:8080`。
 
-## 环境变量
+## ⚙️ 环境变量
 
 复制 `.env.example` 为 `.env` 后按需填写：
 
@@ -86,7 +100,7 @@ npm run dev
 | `VITE_WS_BASE_URL` | 前端 WebSocket 地址覆盖 | 自动检测 |
 | `VITE_AUDIO_CHUNK_DURATION_MS` | 前端切片间隔（毫秒）| `200` |
 
-## 架构
+## 🏗️ 架构
 
 ```
 浏览器麦克风/系统音频
@@ -114,7 +128,7 @@ npm run dev
 | `subtitles.vtt` | WebVTT 字幕 |
 | `playback-manifest.json` | 回放清单 |
 
-## REST API
+## 🔌 REST API
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -130,7 +144,7 @@ npm run dev
 | `GET` | `/api/playback/sessions/{id}` | 回放清单 |
 | `WS` | `/ws/translate/{sessionId}` | 实时同传 WebSocket |
 
-## 页面路由
+## 🗺️ 页面路由
 
 | 路径 | 页面 | 说明 |
 | --- | --- | --- |
@@ -140,7 +154,7 @@ npm run dev
 | `/summary` | `SummaryPage` | 会后总结详情 |
 | `/playback` | `PlaybackPage` | 会话回放 |
 
-## 项目结构
+## 📁 项目结构
 
 ```
 ├── backend/
@@ -170,7 +184,7 @@ npm run dev
 └── .env.example
 ```
 
-## 验收清单
+## ✅ 验收清单
 
 1. 启动后端，`GET /api/health` 返回 `UP`
 2. 启动前端，页面显示 `MoYu FlowSub` 标题
@@ -189,9 +203,9 @@ npm run dev
 15. 浮窗字幕独立窗口与主页同步更新
 
 
-## 后续计划
+## 📋 后续计划
 
-如果以后时间充足，可能会考虑添加以下功能：
+如果后续时间充足，可能会考虑添加以下功能：
 - 支持多语言（除英文、中文、日文外的其他语言，如法文、德文等）
 - 支持自定义模型（如 Qwen Plus、Qwen Turbo 等）
 - 支持桌面端（如 Windows、macOS 等）以及移动端（如 Android、iOS 等）
