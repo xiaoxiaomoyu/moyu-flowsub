@@ -56,6 +56,13 @@ public class SessionService {
         return session;
     }
 
+    /**
+     * 从 Kodo 归档恢复会话。仅由 KodoArchiveLoader 调用。
+     */
+    public void loadFromKodo(FlowSession session) {
+        sessions.putIfAbsent(session.getSessionId(), session);
+    }
+
     public FlowSession finish(String sessionId) {
         FlowSession session = get(sessionId);
         session.setStatus(SessionStatus.FINISHED);

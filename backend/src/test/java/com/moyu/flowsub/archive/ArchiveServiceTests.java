@@ -183,5 +183,20 @@ class ArchiveServiceTests {
             }
             return new KodoUploadResult(key, "https://kodo.example.com/" + key, contentType, data.length, Instant.now());
         }
+
+        @Override
+        public java.util.List<String> list(String prefix) {
+            return java.util.List.of();
+        }
+
+        @Override
+        public byte[] download(String key) {
+            throw new UnsupportedOperationException("FakeQiniuService does not support download");
+        }
+
+        @Override
+        public String downloadUrl(String key) {
+            return "https://kodo.example.com/" + key;
+        }
     }
 }
