@@ -123,9 +123,7 @@ export interface Metrics {
   correctionCount: number
   audioChunkCount: number
   providerName: string
-  providerFallback: boolean
   translationProviderName: string
-  translationProviderFallback: boolean
 }
 
 export interface AsrProviderStatus {

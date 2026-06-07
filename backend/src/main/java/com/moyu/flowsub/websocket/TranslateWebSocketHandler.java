@@ -8,6 +8,7 @@ import com.moyu.flowsub.asr.AsrResult;
 import com.moyu.flowsub.audio.AudioChunkMeta;
 import com.moyu.flowsub.audio.AudioStreamProcessResult;
 import com.moyu.flowsub.audio.AudioStreamService;
+import com.moyu.flowsub.audio.AudioStreamStartedPayload;
 import com.moyu.flowsub.metrics.MetricsPayload;
 import com.moyu.flowsub.session.SessionService;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
@@ -111,10 +112,17 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
 
         sendQuietly(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, result.providerStatus()));
         if (result.asrResults().isEmpty()) {
+            // 音频正在采集但 ASR 尚未产出结果，向字幕区发送采集状态让用户确认麦克风链路通畅。
+            sendQuietly(session, WsMessage.of("ASR_PARTIAL", sessionId,
+                    new SubtitlePayload("audio_stream_status",
+                            "Receiving audio... chunk #" + result.chunkCount()
+                                    + " | " + meta.sampleRate() + "Hz | level " + String.format("%.2f", meta.level()),
+                            "正在接收麦克风音频，等待 Qwen ASR 识别...",
+                            "PARTIAL", 0, false, 0)));
             sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
                     recordMetrics(sessionId, new MetricsPayload(0, 0, 0, result.subtitleCount(), 0,
-                            result.chunkCount(), result.providerStatus().provider(), result.providerStatus().fallback(),
-                            "", false))));
+                            result.chunkCount(), result.providerStatus().provider(),
+                            ""))));
             return;
         }
         for (AsrResult asrResult : result.asrResults()) {
@@ -133,8 +141,7 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
             sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
                     recordMetrics(sessionId, new MetricsPayload(asrResult.latencyMs(), 0, asrResult.latencyMs(),
                             result.subtitleCount(), 0, result.chunkCount(),
-                            result.providerStatus().provider(), result.providerStatus().fallback(),
-                            "", false))));
+                            result.providerStatus().provider(), ""))));
 
             if ("FINAL".equals(asrResult.status())) {
                 startTranslation(session, sessionId, asrResult, result);
@@ -164,7 +171,16 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
         AudioChunkMeta meta = payload == null || payload.isMissingNode()
                 ? new AudioChunkMeta(0, System.currentTimeMillis(), "pcm_s16le", 16000, 1, 0)
                 : objectMapper.treeToValue(payload, AudioChunkMeta.class);
-        send(session, WsMessage.of("AUDIO_STREAM_STARTED", sessionId, audioStreamService.start(sessionId, meta)));
+        try {
+            send(session, WsMessage.of("AUDIO_STREAM_STARTED", sessionId, audioStreamService.start(sessionId, meta)));
+        } catch (Exception e) {
+            log.warn("ASR 启动失败，sessionId={}，将仅展示采集状态。", sessionId, e);
+            // ASR 不可用时仍允许音频采集，前端字幕区会显示采集状态而非 ASR 结果。
+            audioStreamService.startWithoutAsr(sessionId, meta);
+            send(session, WsMessage.of("AUDIO_STREAM_STARTED", sessionId,
+                    new AudioStreamStartedPayload("麦克风", "pcm_s16le",
+                            meta.sampleRate() > 0 ? meta.sampleRate() : 16000, 300)));
+        }
         send(session, WsMessage.of("ASR_PROVIDER_STATUS", sessionId, audioStreamService.providerStatus(sessionId)));
         send(session, WsMessage.of("TRANSLATION_PROVIDER_STATUS", sessionId, translationService.currentStatus()));
     }
@@ -189,18 +205,23 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
                 "sourceText", asrResult.text()
         )));
         executorService.submit(() -> {
-            TranslationProcessResult translation = translationService.translateFinal(sessionId, asrResult);
-            sendQuietly(session, WsMessage.of("TRANSLATION_PROVIDER_STATUS", sessionId, translation.providerStatus()));
-            archiveService.recordSubtitle(sessionId, translation.subtitle());
-            sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId, translation.subtitle()));
-            long totalLatency = asrResult.latencyMs() + translation.translateLatencyMs();
-            sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
-                    recordMetrics(sessionId, new MetricsPayload(asrResult.latencyMs(), translation.translateLatencyMs(), totalLatency,
-                            audioResult.subtitleCount(), translation.totalCorrectionCount(), audioResult.chunkCount(),
-                            audioResult.providerStatus().provider(), audioResult.providerStatus().fallback(),
-                            translation.providerStatus().provider(), translation.providerStatus().fallback()))));
+            translationService.translateFinalStreaming(sessionId, asrResult,
+                    (partial) -> {
+                        sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId, partial));
+                    },
+                    (result) -> {
+                        sendQuietly(session, WsMessage.of("TRANSLATION_PROVIDER_STATUS", sessionId, result.providerStatus()));
+                        archiveService.recordSubtitle(sessionId, result.subtitle());
+                        sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId, result.subtitle()));
+                        long totalLatency = asrResult.latencyMs() + result.translateLatencyMs();
+                        sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
+                                recordMetrics(sessionId, new MetricsPayload(asrResult.latencyMs(), result.translateLatencyMs(), totalLatency,
+                                        audioResult.subtitleCount(), result.totalCorrectionCount(), audioResult.chunkCount(),
+                                        audioResult.providerStatus().provider(),
+                                        result.providerStatus().provider()))));
 
-            triggerCorrectionReview(session, sessionId);
+                        triggerCorrectionReview(session, sessionId);
+                    });
         });
     }
 

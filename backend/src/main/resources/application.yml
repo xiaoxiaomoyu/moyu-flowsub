@@ -23,8 +23,9 @@ qwen:
   enabled: ${QWEN_ENABLED:false}
   api-key: ${DASHSCOPE_API_KEY:}
   asr-model: ${QWEN_ASR_MODEL:qwen3-asr-flash-realtime}
-  translation-model: ${QWEN_TRANSLATION_MODEL:qwen-plus}
+  translation-model: ${QWEN_TRANSLATION_MODEL:qwen-turbo}
   summary-model: ${QWEN_SUMMARY_MODEL:qwen-plus}
+  correction-model: ${QWEN_CORRECTION_MODEL:qwen-plus}
   base-url: ${QWEN_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
   timeout-ms: ${QWEN_TIMEOUT_MS:12000}
   temperature: ${QWEN_TEMPERATURE:0}

@@ -33,7 +33,7 @@ class ArchiveServiceTests {
         archiveService.recordCorrection(sessionId, new SubtitleCorrectionPayload("seg_000001",
                 "Hello every one.", "Hello everyone.", "大家每一个人好。", "大家好。", 2, "修正口语断句。"));
         archiveService.recordMetrics(sessionId, new MetricsPayload(120, 300, 420, 1, 1, 3,
-                "Mock ASR", true, "Mock 翻译", true));
+                "Mock ASR", "Mock 翻译"));
         archiveService.appendAudio(sessionId, new byte[]{1, 2, 3, 4});
 
         ArchiveStatusResponse response = archiveService.archiveSession(sessionId);
@@ -155,7 +155,7 @@ class ArchiveServiceTests {
 
     private SummaryService summaryService() {
         return new SummaryService(List.of(
-                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "", 1000, 0), objectMapper())
+                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "", "", 1000, 0), objectMapper())
         ));
     }
 

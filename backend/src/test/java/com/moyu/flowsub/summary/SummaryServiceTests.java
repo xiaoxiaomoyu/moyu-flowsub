@@ -24,7 +24,7 @@ class SummaryServiceTests {
     @Test
     void shouldReturnEmptyWhenQwenUnavailable() {
         SummaryService summaryService = new SummaryService(List.of(
-                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "http://localhost", 1000, 0),
+                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "", "http://localhost", 1000, 0),
                         new ObjectMapper())
         ));
 
@@ -50,7 +50,7 @@ class SummaryServiceTests {
                 """);
         try {
             QwenSummaryProvider provider = new QwenSummaryProvider(
-                    new QwenProperties(true, "test-key", "", "", "qwen-plus",
+                    new QwenProperties(true, "test-key", "", "", "qwen-plus", "",
                             "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
                     new ObjectMapper()
             );
@@ -71,7 +71,7 @@ class SummaryServiceTests {
     @Test
     void shouldRenderMarkdownWhenNoProviderAvailable() {
         SummaryService summaryService = new SummaryService(List.of(
-                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "http://localhost", 1000, 0),
+                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "", "http://localhost", 1000, 0),
                         new ObjectMapper())
         ));
 
@@ -112,7 +112,7 @@ class SummaryServiceTests {
         ));
         return new ArchiveSnapshot(session, subtitles.size(), corrections.size(), 128,
                 new MetricsPayload(120, 260, 380, subtitles.size(), corrections.size(), 4,
-                        "Qwen ASR", false, "Qwen 翻译", false),
+                        "Qwen ASR", "Qwen 翻译"),
                 subtitles, corrections, Instant.now());
     }
 
