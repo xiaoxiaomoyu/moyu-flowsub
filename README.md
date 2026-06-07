@@ -4,22 +4,17 @@
 
 ## 📊 语言分布
 
-![Top Languages](https://img.shields.io/github/languages/top/xiaoxiaomoyu/moyu-flowsub)
-![Language Count](https://img.shields.io/github/languages/count/xiaoxiaomoyu/moyu-flowsub)
-
-| 语言 | 占比 |
-| --- | --- |
-| Java | 68.4% |
-| Vue | 16.3% |
-| TypeScript | 10.0% |
-| CSS | 4.4% |
-| JavaScript | 0.6% |
-| Dockerfile | 0.2% |
-| HTML | 0.1% |
+![Java](https://img.shields.io/badge/Java-68.4%25-b07219)
+![Vue](https://img.shields.io/badge/Vue-16.3%25-41b883)
+![TypeScript](https://img.shields.io/badge/TypeScript-10.0%25-3178c6)
+![CSS](https://img.shields.io/badge/CSS-4.4%25-563d7c)
+![JavaScript](https://img.shields.io/badge/JavaScript-0.6%25-f1e05a)
+![Dockerfile](https://img.shields.io/badge/Dockerfile-0.2%25-384d54)
+![HTML](https://img.shields.io/badge/HTML-0.1%25-e34c26)
 
 ## 🎬 演示视频路径
 
-[MoYu FlowSub 演示视频](https://b23.tv/6437yle)，视频已经发布啦！管快去看看吧！
+[MoYu FlowSub 演示视频](https://b23.tv/6437yle)视频已经发布啦！管快去看看吧！
 
 ## ✨ 功能概览
 
