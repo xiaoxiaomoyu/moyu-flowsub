@@ -21,8 +21,8 @@ import java.util.function.Consumer;
 public class TranslationService {
 
     private static final Logger log = LoggerFactory.getLogger(TranslationService.class);
-    private static final int MAX_CONTEXT_SIZE = 2;
-    private static final int MAX_CORRECTION_SIZE = 2;
+    private static final int MAX_CONTEXT_SIZE = 6;
+    private static final int MAX_CORRECTION_SIZE = 4;
 
     private final List<TranslationProvider> providers;
     private final Map<String, TranslationSessionState> sessions = new ConcurrentHashMap<>();
@@ -275,8 +275,8 @@ public class TranslationService {
             if (!StringUtils.hasText(segmentId)) {
                 return null;
             }
+            // 搜索全部上下文，确保 ASR 拆分产生的早期片段也能被修正命中
             return context.stream()
-                    .skip(Math.max(0, context.size() - MAX_CORRECTION_SIZE))
                     .filter(item -> segmentId.equals(item.segmentId()))
                     .findFirst()
                     .orElse(null);

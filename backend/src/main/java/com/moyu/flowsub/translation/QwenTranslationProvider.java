@@ -32,8 +32,11 @@ public class QwenTranslationProvider implements TranslationProvider {
 
     private static final String CORRECTION_SYSTEM_PROMPT = """
             你是 MoYu FlowSub 的上下文修正引擎。
-            根据最近的字幕上下文，检查前 1-2 条中文翻译是否需要修正。
-            只修正明显不准确或与后文矛盾的译文，不要过度修改。
+            根据最近的字幕上下文，完成两项任务：
+            1. 合并不连贯的片段：ASR 可能将一句话拆成多个片段（如 "I saw a picture in a book." "Called." "True stories."），
+               识别并合并这些片段，将合并后的完整英文填入 newSourceText，合并后的中文填入 newTranslatedText，
+               segmentId 填第一个片段的 ID，reason 说明合并了哪些片段。
+            2. 修正不准确的译文：根据上下文，修正前文明显错误或不一致的翻译。
             必须只返回 JSON：
             {"corrections":[{"segmentId":"字幕ID","newSourceText":"修正后英文原文","newTranslatedText":"修正后中文","reason":"修正原因"}]}
             如果无需修正，返回 {"corrections":[]}。""";
@@ -285,19 +288,15 @@ public class QwenTranslationProvider implements TranslationProvider {
         if (!request.recentContext().isEmpty()) {
             builder.append("最近字幕上下文：\n");
             for (TranslationContextItem item : request.recentContext()) {
-                builder.append("- ")
-                        .append(item.segmentId())
-                        .append(" | EN: ")
+                builder.append("EN: ")
                         .append(item.sourceText())
-                        .append(" | ZH: ")
+                        .append("\nZH: ")
                         .append(item.translatedText())
                         .append('\n');
             }
             builder.append('\n');
         }
         builder.append("当前需要翻译的英文字幕：\n")
-                .append(request.segmentId())
-                .append(" | ")
                 .append(request.sourceText());
         return builder.toString();
     }
