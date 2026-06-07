@@ -9,6 +9,7 @@ export interface AudioChunkMeta {
 
 export interface AudioCaptureState {
   running: boolean
+  source: 'mic' | 'system'
   permissionStatus: 'IDLE' | 'REQUESTING' | 'GRANTED' | 'DENIED' | 'ERROR'
   sampleRate: number
   level: number
@@ -21,6 +22,7 @@ type StateHandler = (state: AudioCaptureState) => void
 
 const initialState: AudioCaptureState = {
   running: false,
+  source: 'mic',
   permissionStatus: 'IDLE',
   sampleRate: 0,
   level: 0,
@@ -37,25 +39,35 @@ class AudioCapture {
   private state: AudioCaptureState = { ...initialState }
   private onState: StateHandler | null = null
 
-  async start(onChunk: ChunkHandler, onState: StateHandler, chunkDurationMs = 300) {
+  async start(onChunk: ChunkHandler, onState: StateHandler, chunkDurationMs = 300, source: 'mic' | 'system' = 'mic') {
     if (this.state.running) {
       return
     }
 
     this.onState = onState
-    this.patchState({ permissionStatus: 'REQUESTING', errorMessage: '' })
+    this.patchState({ source, permissionStatus: 'REQUESTING', errorMessage: '' })
 
     try {
-      this.mediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1
-        }
-      })
+      if (source === 'system') {
+        // getDisplayMedia 捕获浏览器标签页/系统音频，需要勾选"共享音频"
+        this.mediaStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        })
+        // 只保留音频轨道，关闭视频轨道
+        this.mediaStream.getVideoTracks().forEach(t => t.stop())
+      } else {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          }
+        })
+      }
 
-      this.audioContext = new AudioContext({ sampleRate: 16000 })
+      this.audioContext = new AudioContext()
       await this.audioContext.audioWorklet.addModule(`${import.meta.env.BASE_URL}audio-worklet-processor.js`)
 
       this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream)
@@ -75,7 +87,6 @@ class AudioCapture {
         onChunk(meta, buffer)
       }
 
-      // Worklet 需要挂在音频图中才会持续运行，静音 Gain 可以避免本地回放产生啸叫。
       this.sourceNode.connect(this.workletNode)
       this.workletNode.connect(this.silentGain)
       this.silentGain.connect(this.audioContext.destination)
@@ -89,7 +100,7 @@ class AudioCapture {
       })
     } catch (error) {
       this.stop()
-      const message = error instanceof Error ? error.message : '麦克风采集启动失败'
+      const message = error instanceof Error ? error.message : '音频采集启动失败'
       this.patchState({
         running: false,
         permissionStatus: message.includes('Permission') || message.includes('denied') ? 'DENIED' : 'ERROR',

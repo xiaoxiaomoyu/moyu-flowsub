@@ -7,10 +7,9 @@ import com.moyu.flowsub.asr.AsrProviderStatusPayload;
 import com.moyu.flowsub.asr.AsrResult;
 import com.moyu.flowsub.asr.AsrService;
 import com.moyu.flowsub.asr.AsrStreamSession;
-import com.moyu.flowsub.asr.FunAsrProvider;
 import com.moyu.flowsub.asr.MockAsrProvider;
-import com.moyu.flowsub.asr.QiniuAsrProvider;
-import com.moyu.flowsub.qiniu.QiniuAiProperties;
+import com.moyu.flowsub.asr.QwenAsrProvider;
+import com.moyu.flowsub.qwen.QwenProperties;
 import com.moyu.flowsub.session.CreateSessionRequest;
 import com.moyu.flowsub.session.SessionService;
 import org.junit.jupiter.api.Test;
@@ -24,11 +23,10 @@ class AudioStreamServiceTests {
     @Test
     void shouldFallbackToMockAsrWhenCloudProviderUnavailable() {
         ObjectMapper objectMapper = new ObjectMapper();
-        AsrProperties asrProperties = new AsrProperties(true, false, "", "", 300);
-        QiniuAiProperties qiniuAiProperties = new QiniuAiProperties(false, "", "wss://api.qnaigc.com/v1/voice/asr");
+        AsrProperties asrProperties = new AsrProperties(true, 300);
+        QwenProperties qwenProperties = new QwenProperties(false, "", "", "", "", "", 1000, 0);
         AsrService asrService = new AsrService(List.of(
-                new QiniuAsrProvider(qiniuAiProperties, objectMapper),
-                new FunAsrProvider(asrProperties, objectMapper),
+                new QwenAsrProvider(qwenProperties, objectMapper),
                 new MockAsrProvider(asrProperties)
         ));
         SessionService sessionService = new SessionService();
@@ -56,11 +54,10 @@ class AudioStreamServiceTests {
     @Test
     void shouldExposeUnavailableStatusWhenAllProvidersDisabled() {
         ObjectMapper objectMapper = new ObjectMapper();
-        AsrProperties asrProperties = new AsrProperties(false, false, "", "", 300);
-        QiniuAiProperties qiniuAiProperties = new QiniuAiProperties(false, "", "wss://api.qnaigc.com/v1/voice/asr");
+        AsrProperties asrProperties = new AsrProperties(false, 300);
+        QwenProperties qwenProperties = new QwenProperties(false, "", "", "", "", "", 1000, 0);
         AsrService asrService = new AsrService(List.of(
-                new QiniuAsrProvider(qiniuAiProperties, objectMapper),
-                new FunAsrProvider(asrProperties, objectMapper),
+                new QwenAsrProvider(qwenProperties, objectMapper),
                 new MockAsrProvider(asrProperties)
         ));
         SessionService sessionService = new SessionService();
@@ -75,12 +72,12 @@ class AudioStreamServiceTests {
         assertThat(result.asrResults()).isEmpty();
         assertThat(result.providerStatus().available()).isFalse();
         assertThat(result.providerStatus().endpointType()).isEqualTo("NONE");
-        assertThat(result.providerStatus().reason()).contains("七牛云智能语音");
+        assertThat(result.providerStatus().reason()).contains("Qwen");
     }
 
     @Test
     void shouldFallbackWhenRealtimeProviderReturnsNoTextForManyChunks() {
-        AsrProperties asrProperties = new AsrProperties(true, false, "", "", 300);
+        AsrProperties asrProperties = new AsrProperties(true, 300);
         AsrService asrService = new AsrService(List.of(
                 new SilentRealtimeProvider(),
                 new MockAsrProvider(asrProperties)
@@ -91,7 +88,7 @@ class AudioStreamServiceTests {
 
         audioStreamService.start(sessionId, new AudioChunkMeta(0, System.currentTimeMillis(), "pcm_s16le", 16000, 1, 0));
         AudioStreamProcessResult result = null;
-        for (int index = 1; index <= 20; index++) {
+        for (int index = 1; index <= 41; index++) {
             result = audioStreamService.accept(sessionId,
                     new AudioChunkMeta(index, System.currentTimeMillis(), "pcm_s16le", 16000, 1, 0.4),
                     new byte[3200]);
@@ -102,7 +99,7 @@ class AudioStreamServiceTests {
         assertThat(result.providerStatus().provider()).isEqualTo("Mock ASR");
         assertThat(result.providerStatus().fallback()).isTrue();
         assertThat(result.providerStatus().reason()).contains("未返回任何字幕文本");
-        assertThat(result.chunkCount()).isEqualTo(20);
+        assertThat(result.chunkCount()).isEqualTo(41);
     }
 
     private static class SilentRealtimeProvider implements AsrProvider {
@@ -120,7 +117,7 @@ class AudioStreamServiceTests {
         @Override
         public AsrProviderStatusPayload status() {
             return new AsrProviderStatusPayload(name(), true, false, "测试用沉默 Provider。",
-                    true, "测试用连接已建立。", "QINIU_WS");
+                    true, "测试用连接已建立。", "QWEN_ASR");
         }
 
         @Override
@@ -138,7 +135,6 @@ class AudioStreamServiceTests {
 
                 @Override
                 public void close() {
-                    // 测试 Provider 没有真实连接。
                 }
             };
         }

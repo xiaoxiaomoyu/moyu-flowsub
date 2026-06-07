@@ -8,6 +8,7 @@ import { useSubtitleStore } from './subtitleStore'
 
 const emptyAudioState: AudioCaptureState = {
   running: false,
+  source: 'mic',
   permissionStatus: 'IDLE',
   sampleRate: 0,
   level: 0,
@@ -24,6 +25,8 @@ const emptyProviderStatus: AsrProviderStatus = {
   reason: '等待创建会话。',
   endpointType: 'NONE'
 }
+
+const subtitleChannel = new BroadcastChannel('flowsub-subtitles')
 
 const emptyTranslationProviderStatus: TranslationProviderStatus = {
   provider: '等待翻译',
@@ -97,11 +100,15 @@ export const useSessionStore = defineStore('session', {
       if (!this.currentSession || this.connectionStatus !== 'CONNECTED') {
         return
       }
-      wsClient.sendStartAudioStream()
       this.lastEvent = 'START_AUDIO_STREAM'
       try {
         await audioCapture.start(
           (meta, data) => {
+            // 诊断：每 10 个块打印一次，确认前端采集正常
+            if (meta.chunkIndex % 10 === 1) {
+              console.log('[audioCapture] chunk', meta.chunkIndex,
+                'size=', data.byteLength, 'sampleRate=', meta.sampleRate, 'level=', meta.level.toFixed(4))
+            }
             if (!wsClient.sendAudioChunk(meta, data)) {
               audioCapture.stop()
               this.audioCapture = {
@@ -116,6 +123,41 @@ export const useSessionStore = defineStore('session', {
           },
           Number(import.meta.env.VITE_AUDIO_CHUNK_DURATION_MS || 200)
         )
+        // AudioContext 已创建，发送实际的采样率给后端，避免采样率不匹配导致 ASR 无法识别。
+        wsClient.sendStartAudioStream(audioCapture.snapshot().sampleRate || 16000)
+      } catch {
+        wsClient.sendStopAudioStream()
+        this.lastEvent = 'STOP_AUDIO_STREAM'
+      }
+    },
+    async startSystemAudioCapture() {
+      if (!this.currentSession || this.connectionStatus !== 'CONNECTED') {
+        return
+      }
+      this.lastEvent = 'START_AUDIO_STREAM'
+      try {
+        await audioCapture.start(
+          (meta, data) => {
+            if (meta.chunkIndex % 10 === 1) {
+              console.log('[systemAudio] chunk', meta.chunkIndex,
+                'size=', data.byteLength, 'sampleRate=', meta.sampleRate, 'level=', meta.level.toFixed(4))
+            }
+            if (!wsClient.sendAudioChunk(meta, data)) {
+              audioCapture.stop()
+              this.audioCapture = {
+                ...audioCapture.snapshot(),
+                permissionStatus: 'ERROR',
+                errorMessage: 'WebSocket 未连接，音频块没有发送到后端。请重新创建会话后再开始采集。'
+              }
+            }
+          },
+          (state) => {
+            this.audioCapture = state
+          },
+          Number(import.meta.env.VITE_AUDIO_CHUNK_DURATION_MS || 200),
+          'system'
+        )
+        wsClient.sendStartAudioStream(audioCapture.snapshot().sampleRate || 16000)
       } catch {
         wsClient.sendStopAudioStream()
         this.lastEvent = 'STOP_AUDIO_STREAM'
@@ -150,9 +192,11 @@ export const useSessionStore = defineStore('session', {
       }
       if (message.type === 'SUBTITLE_UPDATE') {
         subtitleStore.addSubtitle(message.payload as SubtitleSegment)
+        subtitleChannel.postMessage(message.payload)
       }
       if (message.type === 'ASR_PARTIAL' || message.type === 'ASR_FINAL') {
         subtitleStore.addSubtitle(message.payload as SubtitleSegment)
+        subtitleChannel.postMessage(message.payload)
       }
       if (message.type === 'SUBTITLE_CORRECTION') {
         subtitleStore.applyCorrection(message.payload as SubtitleCorrection)

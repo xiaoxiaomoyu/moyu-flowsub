@@ -3,9 +3,9 @@ package com.moyu.flowsub.summary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moyu.flowsub.archive.ArchiveSnapshot;
+import com.moyu.flowsub.qwen.QwenProperties;
 import com.moyu.flowsub.subtitle.SubtitleCorrectionPayload;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
-import com.moyu.flowsub.translation.DeepSeekProperties;
 import com.moyu.flowsub.translation.TranslationProviderUnavailableException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -20,13 +20,13 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-public class DeepSeekSummaryProvider implements SummaryProvider {
+public class QwenSummaryProvider implements SummaryProvider {
 
-    private final DeepSeekProperties properties;
+    private final QwenProperties properties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public DeepSeekSummaryProvider(DeepSeekProperties properties, ObjectMapper objectMapper) {
+    public QwenSummaryProvider(QwenProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
@@ -36,7 +36,7 @@ public class DeepSeekSummaryProvider implements SummaryProvider {
 
     @Override
     public String name() {
-        return "DeepSeek-V4-Flash";
+        return "Qwen 总结";
     }
 
     @Override
@@ -48,13 +48,12 @@ public class DeepSeekSummaryProvider implements SummaryProvider {
     public boolean available() {
         return properties.enabled()
                 && StringUtils.hasText(properties.apiKey())
-                && StringUtils.hasText(properties.baseUrl())
-                && StringUtils.hasText(properties.model());
+                && StringUtils.hasText(properties.baseUrl());
     }
 
     @Override
     public String unavailableReason() {
-        return available() ? "" : "DeepSeek 总结未启用或配置不完整。";
+        return available() ? "" : "Qwen 总结未启用或配置不完整。";
     }
 
     @Override
@@ -62,8 +61,9 @@ public class DeepSeekSummaryProvider implements SummaryProvider {
         if (!available()) {
             throw new TranslationProviderUnavailableException(unavailableReason());
         }
+        String model = StringUtils.hasText(properties.summaryModel()) ? properties.summaryModel() : "qwen-plus";
         String requestBody = objectMapper.writeValueAsString(Map.of(
-                "model", properties.model(),
+                "model", model,
                 "temperature", 0.2,
                 "stream", false,
                 "response_format", Map.of("type", "json_object"),
@@ -81,7 +81,7 @@ public class DeepSeekSummaryProvider implements SummaryProvider {
                 .build();
         HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new TranslationProviderUnavailableException("DeepSeek 总结调用失败，HTTP " + response.statusCode());
+            throw new TranslationProviderUnavailableException("Qwen 总结调用失败，HTTP " + response.statusCode());
         }
         String content = objectMapper.readTree(response.body())
                 .path("choices")
@@ -90,7 +90,7 @@ public class DeepSeekSummaryProvider implements SummaryProvider {
                 .path("content")
                 .asText("");
         if (!StringUtils.hasText(content)) {
-            throw new TranslationProviderUnavailableException("DeepSeek 总结返回内容为空。");
+            throw new TranslationProviderUnavailableException("Qwen 总结返回内容为空。");
         }
         return parseModelPayload(content);
     }
@@ -151,7 +151,7 @@ public class DeepSeekSummaryProvider implements SummaryProvider {
                 parseKeySentences(root.path("keySentences")),
                 name(),
                 false,
-                "DeepSeek 会后总结生成成功。"
+                "Qwen 会后总结生成成功。"
         );
     }
 

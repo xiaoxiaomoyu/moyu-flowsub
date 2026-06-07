@@ -2,6 +2,9 @@ package com.moyu.flowsub.translation;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moyu.flowsub.qwen.QwenProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -13,10 +16,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 @Component
-public class DeepSeekTranslationProvider implements TranslationProvider {
+public class QwenTranslationProvider implements TranslationProvider {
 
     private static final String TRANSLATION_SYSTEM_PROMPT = """
             你是 MoYu FlowSub 的实时同传字幕翻译引擎。
@@ -31,11 +33,13 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
             {"corrections":[{"segmentId":"字幕ID","newSourceText":"修正后英文原文","newTranslatedText":"修正后中文","reason":"修正原因"}]}
             如果无需修正，返回 {"corrections":[]}。""";
 
-    private final DeepSeekProperties properties;
+    private static final Logger log = LoggerFactory.getLogger(QwenTranslationProvider.class);
+
+    private final QwenProperties properties;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public DeepSeekTranslationProvider(DeepSeekProperties properties, ObjectMapper objectMapper) {
+    public QwenTranslationProvider(QwenProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
@@ -45,7 +49,7 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
 
     @Override
     public String name() {
-        return "DeepSeek-V4-Flash";
+        return "Qwen 翻译";
     }
 
     @Override
@@ -57,25 +61,24 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
     public TranslationProviderStatusPayload status() {
         boolean configured = properties.enabled()
                 && StringUtils.hasText(properties.apiKey())
-                && StringUtils.hasText(properties.baseUrl())
-                && StringUtils.hasText(properties.model());
+                && StringUtils.hasText(properties.baseUrl());
         String message = configured
-                ? "DeepSeek 翻译已配置，将优先使用流式翻译生成中文译文。"
-                : "DeepSeek 未配置，自动降级到 Mock 翻译。";
+                ? "Qwen 翻译已配置，将优先使用流式翻译生成中文译文。"
+                : "Qwen 未配置，自动降级到 Mock 翻译。";
         return new TranslationProviderStatusPayload(name(), configured, false, message, message);
     }
 
     @Override
     public TranslationResult translate(TranslationRequest request) throws Exception {
         if (!status().available()) {
-            throw new TranslationProviderUnavailableException("DeepSeek 配置不完整。");
+            throw new TranslationProviderUnavailableException("Qwen 配置不完整。");
         }
 
         long start = System.currentTimeMillis();
+        String model = StringUtils.hasText(properties.translationModel()) ? properties.translationModel() : "qwen-plus";
         String requestBody = objectMapper.writeValueAsString(Map.of(
-                "model", properties.model(),
+                "model", model,
                 "temperature", properties.temperature(),
-                "stream", true,
                 "messages", List.of(
                         Map.of("role", "system", "content", TRANSLATION_SYSTEM_PROMPT),
                         Map.of("role", "user", "content", buildTranslationUserPrompt(request))
@@ -83,42 +86,45 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
         ));
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(chatCompletionsUrl()))
-                .timeout(Duration.ofMillis(Math.max(1000, properties.timeoutMs())))
+                .timeout(Duration.ofMillis(Math.max(3000, properties.timeoutMs())))
                 .header("Authorization", "Bearer " + properties.apiKey())
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
-        HttpResponse<Stream<String>> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofLines());
+        HttpResponse<String> response;
+        try {
+            response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception e) {
+            log.warn("Qwen 翻译 HTTP 请求失败：{}", e.getMessage());
+            throw new TranslationProviderUnavailableException("Qwen 调用失败：" + e.getMessage(), e);
+        }
+
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new TranslationProviderUnavailableException("DeepSeek 调用失败，HTTP " + response.statusCode());
+            log.warn("Qwen 翻译返回非 2xx 状态码：{}，body={}", response.statusCode(),
+                    response.body() == null ? "" : response.body().substring(0, Math.min(500, response.body().length())));
+            throw new TranslationProviderUnavailableException("Qwen 调用失败，HTTP " + response.statusCode());
         }
 
-        StringBuilder content = new StringBuilder();
-        try (Stream<String> lines = response.body()) {
-            lines.forEach(line -> {
-                if (line.startsWith("data: ") && line.length() > 6) {
-                    String data = line.substring(6).trim();
-                    if ("[DONE]".equals(data)) {
-                        return;
-                    }
-                    try {
-                        JsonNode chunk = objectMapper.readTree(data);
-                        JsonNode delta = chunk.path("choices").path(0).path("delta").path("content");
-                        if (!delta.isMissingNode()) {
-                            content.append(delta.asText(""));
-                        }
-                    } catch (Exception ignored) {
-                        // 个别 SSE 行解析失败不影响整体翻译结果。
-                    }
-                }
-            });
+        String translatedText;
+        try {
+            JsonNode root = objectMapper.readTree(response.body());
+            translatedText = root.path("choices").path(0).path("message").path("content").asText("").trim();
+        } catch (Exception e) {
+            log.warn("Qwen 翻译响应解析失败：{}", e.getMessage());
+            throw new TranslationProviderUnavailableException("Qwen 响应解析失败：" + e.getMessage(), e);
         }
 
-        String translatedText = content.toString().trim();
         if (!StringUtils.hasText(translatedText)) {
-            throw new TranslationProviderUnavailableException("DeepSeek 流式翻译返回内容为空。");
+            log.warn("Qwen 翻译返回内容为空，body={}",
+                    response.body() == null ? "" : response.body().substring(0, Math.min(500, response.body().length())));
+            throw new TranslationProviderUnavailableException("Qwen 翻译返回内容为空。");
         }
+
+        log.info("Qwen 翻译完成，耗时 {}ms，原文={}，译文={}",
+                System.currentTimeMillis() - start,
+                request.sourceText().length() > 50 ? request.sourceText().substring(0, 50) + "..." : request.sourceText(),
+                translatedText.length() > 50 ? translatedText.substring(0, 50) + "..." : translatedText);
 
         return new TranslationResult(
                 translatedText,
@@ -135,8 +141,9 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
             return List.of();
         }
 
+        String model = StringUtils.hasText(properties.translationModel()) ? properties.translationModel() : "qwen-plus";
         String requestBody = objectMapper.writeValueAsString(Map.of(
-                "model", properties.model(),
+                "model", model,
                 "temperature", 0,
                 "stream", false,
                 "messages", List.of(
@@ -168,7 +175,6 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
             }
             return parseCorrections(content);
         } catch (Exception e) {
-            // 修正链路失败不应影响主翻译链路，静默返回空列表。
             return List.of();
         }
     }

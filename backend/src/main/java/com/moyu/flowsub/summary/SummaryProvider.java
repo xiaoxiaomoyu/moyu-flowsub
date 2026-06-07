@@ -1,7 +1,7 @@
 package com.moyu.flowsub.summary;
 
 /**
- * 会后总结 Provider 统一接口，DeepSeek 优先，Mock 保底。
+ * 会后总结 Provider 统一接口，Qwen 优先，Mock 保底。
  */
 public interface SummaryProvider {
     String name();

@@ -120,12 +120,21 @@ function eventText(type: string) {
         开始麦克风采集
       </el-button>
       <el-button
+        type="primary"
+        :icon="VideoPlay"
+        :disabled="sessionStore.connectionStatus !== 'CONNECTED'"
+        v-if="!sessionStore.audioCapture.running"
+        @click="sessionStore.startSystemAudioCapture"
+      >
+        开始系统音频采集
+      </el-button>
+      <el-button
         type="warning"
         :icon="SwitchButton"
         v-else
         @click="sessionStore.stopAudioCapture"
       >
-        停止麦克风采集
+        停止采集 ({{ sessionStore.audioCapture.source === 'system' ? '系统音频' : '麦克风' }})
       </el-button>
       <el-button
         :icon="VideoPlay"
@@ -208,7 +217,7 @@ function eventText(type: string) {
       title="创建会话后会自动建立 WebSocket 连接"
     >
       <template #default>
-        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 第四阶段已接入 DeepSeek 翻译，未配置时自动降级到 Mock 翻译。</div>
+        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 已接入 Qwen 翻译，未配置时自动降级到 Mock 翻译。</div>
       </template>
     </el-alert>
   </section>

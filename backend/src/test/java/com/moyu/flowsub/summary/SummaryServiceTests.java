@@ -3,11 +3,11 @@ package com.moyu.flowsub.summary;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moyu.flowsub.archive.ArchiveSnapshot;
 import com.moyu.flowsub.metrics.MetricsPayload;
+import com.moyu.flowsub.qwen.QwenProperties;
 import com.moyu.flowsub.session.FlowSession;
 import com.moyu.flowsub.session.SessionStatus;
 import com.moyu.flowsub.subtitle.SubtitleCorrectionPayload;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
-import com.moyu.flowsub.translation.DeepSeekProperties;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
@@ -22,9 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SummaryServiceTests {
 
     @Test
-    void shouldFallbackToMockSummaryWhenDeepSeekUnavailable() {
+    void shouldFallbackToMockSummaryWhenQwenUnavailable() {
         SummaryService summaryService = new SummaryService(List.of(
-                new DeepSeekSummaryProvider(new DeepSeekProperties(false, "", "http://localhost", "deepseek-v4-flash", 1000, 0),
+                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "http://localhost", 1000, 0),
                         new ObjectMapper()),
                 new MockSummaryProvider()
         ));
@@ -38,7 +38,7 @@ class SummaryServiceTests {
     }
 
     @Test
-    void shouldParseDeepSeekSummaryJson() throws Exception {
+    void shouldParseQwenSummaryJson() throws Exception {
         HttpServer server = startServer("""
                 {
                   "choices": [
@@ -51,15 +51,14 @@ class SummaryServiceTests {
                 }
                 """);
         try {
-            DeepSeekSummaryProvider provider = new DeepSeekSummaryProvider(
-                    new DeepSeekProperties(true, "test-key",
-                            "http://127.0.0.1:" + server.getAddress().getPort(), "deepseek-v4-flash", 3000, 0),
+            QwenSummaryProvider provider = new QwenSummaryProvider(
+                    new QwenProperties(true, "test-key", "", "", "qwen-plus", "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
                     new ObjectMapper()
             );
 
             SummaryResult result = provider.summarize(new SummaryRequest(snapshot()));
 
-            assertThat(result.providerName()).isEqualTo("DeepSeek-V4-Flash");
+            assertThat(result.providerName()).isEqualTo("Qwen 总结");
             assertThat(result.fallback()).isFalse();
             assertThat(result.abstractText()).contains("实时字幕系统");
             assertThat(result.timeline()).hasSize(1);

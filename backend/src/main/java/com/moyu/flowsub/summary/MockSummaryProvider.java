@@ -45,7 +45,7 @@ public class MockSummaryProvider implements SummaryProvider {
                 keySentences(subtitles),
                 name(),
                 true,
-                "DeepSeek 未配置或调用失败，已使用规则型 Mock 总结。"
+                "Qwen 未配置或调用失败，已使用规则型 Mock 总结。"
         );
     }
 

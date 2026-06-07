@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 会话级 WebSocket 推送总线，让浏览器音频和后端直播拉流都能复用同一套实时推送通道。
+ * 会话级 WebSocket 推送总线。
  */
 @Component
 public class WebSocketMessageBus {

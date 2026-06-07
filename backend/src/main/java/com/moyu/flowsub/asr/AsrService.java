@@ -69,7 +69,7 @@ public class AsrService {
             }
         }
         return new AsrProviderStatusPayload("未启用", false, true, "没有可用的 ASR Provider。",
-                false, "请配置七牛云 AI API Key、FunASR 地址或启用 Mock ASR。", "NONE");
+                false, "请配置 Qwen API Key 或启用 Mock ASR。", "NONE");
     }
 
     private void appendReason(StringBuilder builder, String provider, String reason) {

@@ -12,10 +12,10 @@ public class MockAsrProvider implements AsrProvider {
     private static final List<String> MOCK_SENTENCES = List.of(
             "Today we will build a real time translation assistant for technical talks.",
             "The browser captures microphone audio and sends small chunks to the backend.",
-            "The backend can connect to Qiniu intelligent speech for recognition.",
-            "If the cloud provider is not ready, the system falls back to a local ASR service.",
+            "The backend can connect to Aliyun intelligent speech for recognition.",
+            "If the cloud provider is not ready, the system falls back to Qwen ASR.",
             "Every stable sentence becomes an English subtitle segment on the page.",
-            "In the next stage, DeepSeek will translate and correct the bilingual subtitles."
+            "In the next stage, Qwen will translate and correct the bilingual subtitles."
     );
 
     private final AsrProperties properties;
