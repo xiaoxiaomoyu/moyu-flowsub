@@ -9,6 +9,7 @@ public record QwenProperties(
         String asrModel,
         String translationModel,
         String summaryModel,
+        String correctionModel,
         String baseUrl,
         int timeoutMs,
         double temperature

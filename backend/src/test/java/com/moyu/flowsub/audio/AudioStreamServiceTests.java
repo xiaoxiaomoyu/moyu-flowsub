@@ -21,7 +21,7 @@ class AudioStreamServiceTests {
     void shouldReturnUnavailableStatusWhenQwenNotConfigured() {
         ObjectMapper objectMapper = new ObjectMapper();
         AsrProperties asrProperties = new AsrProperties(300);
-        QwenProperties qwenProperties = new QwenProperties(false, "", "", "", "", "", 1000, 0);
+        QwenProperties qwenProperties = new QwenProperties(false, "", "", "", "", "", "", 1000, 0);
         AsrService asrService = new AsrService(List.of(
                 new QwenAsrProvider(qwenProperties, objectMapper)
         ));
@@ -39,7 +39,7 @@ class AudioStreamServiceTests {
     void shouldThrowWhenStartCalledWithoutAvailableProvider() {
         ObjectMapper objectMapper = new ObjectMapper();
         AsrProperties asrProperties = new AsrProperties(300);
-        QwenProperties qwenProperties = new QwenProperties(false, "", "", "", "", "", 1000, 0);
+        QwenProperties qwenProperties = new QwenProperties(false, "", "", "", "", "", "", 1000, 0);
         AsrService asrService = new AsrService(List.of(
                 new QwenAsrProvider(qwenProperties, objectMapper)
         ));

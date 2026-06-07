@@ -19,7 +19,7 @@ class TranslationServiceTests {
     @Test
     void shouldThrowWhenQwenNotConfigured() {
         TranslationService translationService = new TranslationService(List.of(
-                new QwenTranslationProvider(new QwenProperties(false, "", "", "", "", "http://localhost", 1000, 0),
+                new QwenTranslationProvider(new QwenProperties(false, "", "", "", "", "", "http://localhost", 1000, 0),
                         new ObjectMapper())
         ));
 
@@ -43,7 +43,7 @@ class TranslationServiceTests {
                 """);
         try {
             QwenTranslationProvider provider = new QwenTranslationProvider(
-                    new QwenProperties(true, "test-key", "", "qwen-plus", "",
+                    new QwenProperties(true, "test-key", "", "qwen-plus", "", "",
                             "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
                     new ObjectMapper()
             );
@@ -80,7 +80,7 @@ class TranslationServiceTests {
         try {
             TranslationService translationService = new TranslationService(List.of(
                     new QwenTranslationProvider(
-                            new QwenProperties(true, "test-key", "", "qwen-plus", "",
+                            new QwenProperties(true, "test-key", "", "qwen-plus", "", "",
                                     "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
                             new ObjectMapper()
                     )

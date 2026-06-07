@@ -11,9 +11,7 @@ public record MetricsPayload(
         int correctionCount,
         int audioChunkCount,
         String providerName,
-        boolean providerFallback,
-        String translationProviderName,
-        boolean translationProviderFallback
+        String translationProviderName
 ) {
     public MetricsPayload(long asrLatencyMs,
                           long translateLatencyMs,
@@ -21,6 +19,6 @@ public record MetricsPayload(
                           int subtitleCount,
                           int correctionCount) {
         this(asrLatencyMs, translateLatencyMs, totalLatencyMs, subtitleCount, correctionCount,
-                0, "未启用", false, "未启用", false);
+                0, "未启用", "未启用");
     }
 }
