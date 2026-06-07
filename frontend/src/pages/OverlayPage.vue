@@ -39,6 +39,8 @@ function keepOnTop() {
   window.focus()
 }
 
+let keepOnTopTimer: ReturnType<typeof setInterval> | null = null
+
 onMounted(() => {
   channel.value = new BroadcastChannel('flowsub-subtitles')
   channel.value.onmessage = (event: MessageEvent) => {
@@ -49,13 +51,18 @@ onMounted(() => {
       }
     })
   }
-  // 失去焦点时立即重新聚焦，保持浮窗置顶
+  // blur 事件可能被浏览器限制，定时轮询确保浮窗始终在前
   window.addEventListener('blur', keepOnTop)
+  keepOnTopTimer = setInterval(keepOnTop, 500)
 })
 
 onUnmounted(() => {
   channel.value?.close()
   window.removeEventListener('blur', keepOnTop)
+  if (keepOnTopTimer) {
+    clearInterval(keepOnTopTimer)
+    keepOnTopTimer = null
+  }
 })
 </script>
 
