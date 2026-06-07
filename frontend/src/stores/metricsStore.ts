@@ -9,9 +9,7 @@ const emptyMetrics: Metrics = {
   correctionCount: 0,
   audioChunkCount: 0,
   providerName: '等待接入',
-  providerFallback: false,
-  translationProviderName: '等待翻译',
-  translationProviderFallback: false
+  translationProviderName: '等待翻译'
 }
 
 // 指标独立成 store，避免字幕列表刷新时影响右侧指标面板状态。

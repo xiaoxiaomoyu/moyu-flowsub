@@ -2,9 +2,17 @@
 import { computed } from 'vue'
 import { DataLine, Timer } from '@element-plus/icons-vue'
 import { useMetricsStore } from '../stores/metricsStore'
+import { useSessionStore } from '../stores/sessionStore'
 
 const metricsStore = useMetricsStore()
+const sessionStore = useSessionStore()
 const metrics = computed(() => metricsStore.metrics)
+
+// 翻译模型名称优先取 Metrics（翻译完成时才有），否则用 WebSocket 推送的 Provider 状态
+const translationName = computed(() => {
+  const name = metrics.value.translationProviderName
+  return name && name !== '' ? name : sessionStore.translationProviderStatus.provider
+})
 </script>
 
 <template>
@@ -44,20 +52,12 @@ const metrics = computed(() => metricsStore.metrics)
         <strong>{{ metrics.audioChunkCount }}</strong>
       </div>
       <div>
-        <span>ASR</span>
+        <span>ASR 模型</span>
         <strong>{{ metrics.providerName }}</strong>
       </div>
       <div>
-        <span>降级状态</span>
-        <strong>{{ metrics.providerFallback ? '已降级' : '主链路' }}</strong>
-      </div>
-      <div>
         <span>翻译模型</span>
-        <strong>{{ metrics.translationProviderName }}</strong>
-      </div>
-      <div>
-        <span>翻译链路</span>
-        <strong>{{ metrics.translationProviderFallback ? '已降级' : '主链路' }}</strong>
+        <strong>{{ translationName }}</strong>
       </div>
     </div>
   </section>
