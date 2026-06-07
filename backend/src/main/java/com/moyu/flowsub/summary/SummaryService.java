@@ -2,6 +2,8 @@ package com.moyu.flowsub.summary;
 
 import com.moyu.flowsub.archive.ArchiveSnapshot;
 import com.moyu.flowsub.session.FlowSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -9,6 +11,8 @@ import java.util.List;
 
 @Service
 public class SummaryService {
+
+    private static final Logger log = LoggerFactory.getLogger(SummaryService.class);
 
     private final List<SummaryProvider> providers;
 
@@ -21,14 +25,16 @@ public class SummaryService {
     public SummaryResult summarize(ArchiveSnapshot snapshot) {
         for (SummaryProvider provider : providers) {
             if (!provider.available()) {
+                log.info("总结 Provider {} 不可用，跳过。", provider.name());
                 continue;
             }
             try {
                 return provider.summarize(new SummaryRequest(snapshot));
             } catch (Exception e) {
-                // 调用失败则尝试下一个。
+                log.warn("{} 总结调用失败：{}", provider.name(), e.getMessage());
             }
         }
+        log.warn("所有总结 Provider 均不可用，返回空结果。sessionId={}", snapshot.session().getSessionId());
         return SummaryResult.empty("没有可用的会后总结 Provider，请配置 Qwen DashScope API Key。");
     }
 

@@ -7,6 +7,8 @@ import com.moyu.flowsub.qwen.QwenProperties;
 import com.moyu.flowsub.subtitle.SubtitleCorrectionPayload;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
 import com.moyu.flowsub.translation.TranslationProviderUnavailableException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -21,6 +23,8 @@ import java.util.Map;
 
 @Component
 public class QwenSummaryProvider implements SummaryProvider {
+
+    private static final Logger log = LoggerFactory.getLogger(QwenSummaryProvider.class);
 
     private final QwenProperties properties;
     private final ObjectMapper objectMapper;
@@ -66,21 +70,23 @@ public class QwenSummaryProvider implements SummaryProvider {
                 "model", model,
                 "temperature", 0.2,
                 "stream", false,
-                "response_format", Map.of("type", "json_object"),
                 "messages", List.of(
                         Map.of("role", "system", "content", systemPrompt()),
                         Map.of("role", "user", "content", userPrompt(request.snapshot()))
                 )
         ));
+        log.info("调用 Qwen 会后总结 API，model={}，字幕数={}", model, request.snapshot().subtitleCount());
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(chatCompletionsUrl()))
-                .timeout(Duration.ofMillis(Math.max(1000, properties.timeoutMs())))
+                .timeout(Duration.ofMillis(Math.max(30000, properties.timeoutMs())))
                 .header("Authorization", "Bearer " + properties.apiKey())
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
         HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            String errorBody = response.body() == null ? "" : response.body().substring(0, Math.min(500, response.body().length()));
+            log.warn("Qwen 总结返回非 2xx 状态码：{}，body={}", response.statusCode(), errorBody);
             throw new TranslationProviderUnavailableException("Qwen 总结调用失败，HTTP " + response.statusCode());
         }
         String content = objectMapper.readTree(response.body())
@@ -90,8 +96,11 @@ public class QwenSummaryProvider implements SummaryProvider {
                 .path("content")
                 .asText("");
         if (!StringUtils.hasText(content)) {
+            log.warn("Qwen 总结返回内容为空，body={}",
+                    response.body() == null ? "" : response.body().substring(0, Math.min(500, response.body().length())));
             throw new TranslationProviderUnavailableException("Qwen 总结返回内容为空。");
         }
+        log.info("Qwen 总结生成成功，响应长度={}", content.length());
         return parseModelPayload(content);
     }
 
