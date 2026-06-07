@@ -36,6 +36,35 @@ public class AudioStreamService {
         return new AudioStreamStartedPayload("麦克风", "pcm_s16le", sampleRate, 300);
     }
 
+    /**
+     * ASR 不可用时仍允许音频采集，前端字幕区会显示音频采集状态而非 ASR 识别结果。
+     */
+    public void startWithoutAsr(String sessionId, AudioChunkMeta meta) {
+        sessionService.markRunning(sessionId);
+        int sampleRate = meta == null || meta.sampleRate() <= 0 ? 16000 : meta.sampleRate();
+        AsrStreamSession noOp = new AsrStreamSession() {
+            @Override
+            public AsrProviderStatusPayload status() {
+                return asrService.currentStatus();
+            }
+
+            @Override
+            public List<AsrResult> accept(AudioChunk chunk) {
+                return List.of();
+            }
+
+            @Override
+            public List<AsrResult> stop() {
+                return List.of();
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        streams.computeIfAbsent(sessionId, k -> new StreamState(noOp));
+    }
+
     public AudioStreamProcessResult accept(String sessionId, AudioChunkMeta meta, byte[] data) {
         StreamState state = streams.computeIfAbsent(sessionId,
                 ignored -> new StreamState(asrService.start(sessionId, meta)));
