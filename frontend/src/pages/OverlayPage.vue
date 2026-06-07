@@ -1,35 +1,61 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import type { SubtitleSegment } from '../types'
+import type { SubtitleCorrection, SubtitleSegment } from '../types'
 
 const subtitles = ref<SubtitleSegment[]>([])
 const listRef = ref<HTMLElement | null>(null)
 const channel = ref<BroadcastChannel | null>(null)
 
+function applyMessage(data: SubtitleSegment | SubtitleCorrection) {
+  if (!data || !data.segmentId) return
+
+  if ('newSourceText' in data) {
+    // SUBTITLE_CORRECTION payload — 修正已有字幕
+    const idx = subtitles.value.findIndex(s => s.segmentId === data.segmentId)
+    if (idx >= 0) {
+      subtitles.value[idx] = {
+        ...subtitles.value[idx],
+        sourceText: data.newSourceText,
+        translatedText: data.newTranslatedText,
+        isCorrected: true
+      }
+    }
+    return
+  }
+
+  // SUBTITLE_UPDATE / ASR_PARTIAL / ASR_FINAL payload
+  const existing = subtitles.value.findIndex(s => s.segmentId === data.segmentId)
+  if (existing >= 0) {
+    subtitles.value[existing] = data
+  } else {
+    subtitles.value.push(data)
+  }
+  if (subtitles.value.length > 60) {
+    subtitles.value = subtitles.value.slice(-40)
+  }
+}
+
+function keepOnTop() {
+  window.focus()
+}
+
 onMounted(() => {
   channel.value = new BroadcastChannel('flowsub-subtitles')
-  channel.value.onmessage = (event: MessageEvent<SubtitleSegment>) => {
-    if (event.data && event.data.segmentId) {
-      const existing = subtitles.value.findIndex(s => s.segmentId === event.data.segmentId)
-      if (existing >= 0) {
-        subtitles.value[existing] = event.data
-      } else {
-        subtitles.value.push(event.data)
+  channel.value.onmessage = (event: MessageEvent) => {
+    applyMessage(event.data)
+    nextTick(() => {
+      if (listRef.value) {
+        listRef.value.scrollTop = listRef.value.scrollHeight
       }
-      if (subtitles.value.length > 60) {
-        subtitles.value = subtitles.value.slice(-40)
-      }
-      nextTick(() => {
-        if (listRef.value) {
-          listRef.value.scrollTop = listRef.value.scrollHeight
-        }
-      })
-    }
+    })
   }
+  // 失去焦点时立即重新聚焦，保持浮窗置顶
+  window.addEventListener('blur', keepOnTop)
 })
 
 onUnmounted(() => {
   channel.value?.close()
+  window.removeEventListener('blur', keepOnTop)
 })
 </script>
 

@@ -67,7 +67,8 @@ class AudioCapture {
         })
       }
 
-      this.audioContext = new AudioContext()
+      // 强制 16000 Hz 匹配 Qwen ASR 要求，避免浏览器默认高采样率（如 48000 Hz）
+      this.audioContext = new AudioContext({ sampleRate: 16000 })
       await this.audioContext.audioWorklet.addModule(`${import.meta.env.BASE_URL}audio-worklet-processor.js`)
 
       this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream)

@@ -1,20 +1,51 @@
 <script setup lang="ts">
+import { onUnmounted, ref } from 'vue'
 import AudioControl from '../components/AudioControl.vue'
 import CorrectionPanel from '../components/CorrectionPanel.vue'
 import MetricsPanel from '../components/MetricsPanel.vue'
 import QiniuStatusCard from '../components/QiniuStatusCard.vue'
 import SubtitlePanel from '../components/SubtitlePanel.vue'
 
+const overlayWindow = ref<Window | null>(null)
+const focusTimer = ref<ReturnType<typeof setInterval> | null>(null)
+
 function openOverlay() {
   const width = 520
   const height = window.screen.height
   const left = window.screen.width - width
-  window.open(
+  overlayWindow.value = window.open(
     '/overlay',
     'moyu-flowsub-overlay',
     `width=${width},height=${height},left=${left},top=0,menubar=no,toolbar=no,location=no,status=no`
   )
+  if (overlayWindow.value) {
+    // 保持浮窗置顶：主窗口获得焦点时同步聚焦浮窗
+    window.addEventListener('focus', focusOverlay)
+    // 浮窗关闭后清理
+    focusTimer.value = setInterval(() => {
+      if (overlayWindow.value?.closed) {
+        cleanupOverlay()
+      }
+    }, 1000)
+  }
 }
+
+function focusOverlay() {
+  overlayWindow.value?.focus()
+}
+
+function cleanupOverlay() {
+  overlayWindow.value = null
+  window.removeEventListener('focus', focusOverlay)
+  if (focusTimer.value) {
+    clearInterval(focusTimer.value)
+    focusTimer.value = null
+  }
+}
+
+onUnmounted(() => {
+  cleanupOverlay()
+})
 </script>
 
 <template>
@@ -35,7 +66,6 @@ function openOverlay() {
     <section class="workspace">
       <aside class="left-column">
         <AudioControl />
-        <QiniuStatusCard />
       </aside>
       <section class="center-column">
         <SubtitlePanel />
@@ -43,6 +73,7 @@ function openOverlay() {
       <aside class="right-column">
         <CorrectionPanel />
         <MetricsPanel />
+        <QiniuStatusCard />
       </aside>
     </section>
   </main>

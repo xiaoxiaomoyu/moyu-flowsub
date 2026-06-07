@@ -193,6 +193,7 @@ export const useSessionStore = defineStore('session', {
       }
       if (message.type === 'SUBTITLE_CORRECTION') {
         subtitleStore.applyCorrection(message.payload as SubtitleCorrection)
+        subtitleChannel.postMessage(message.payload)
       }
       if (message.type === 'ASR_PROVIDER_STATUS') {
         this.asrProviderStatus = message.payload as AsrProviderStatus
