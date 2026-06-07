@@ -1,11 +1,8 @@
 package com.moyu.flowsub;
 
 import com.moyu.flowsub.asr.AsrProperties;
-import com.moyu.flowsub.media.FfmpegProperties;
-import com.moyu.flowsub.media.MikuProperties;
-import com.moyu.flowsub.qiniu.QiniuAiProperties;
 import com.moyu.flowsub.qiniu.QiniuProperties;
-import com.moyu.flowsub.translation.DeepSeekProperties;
+import com.moyu.flowsub.qwen.QwenProperties;
 import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -16,8 +13,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 @SpringBootApplication
-@EnableConfigurationProperties({QiniuProperties.class, QiniuAiProperties.class, AsrProperties.class,
-        DeepSeekProperties.class, MikuProperties.class, FfmpegProperties.class})
+@EnableConfigurationProperties({QiniuProperties.class, AsrProperties.class,
+        QwenProperties.class})
 public class MoYuFlowSubApplication {
 
     public static void main(String[] args) {

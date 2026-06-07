@@ -3,7 +3,7 @@ package com.moyu.flowsub.translation;
 import java.util.List;
 
 /**
- * 翻译 Provider 统一接口，DeepSeek 与 Mock 翻译都挂在同一条链路上。
+ * 翻译 Provider 统一接口，Qwen 与 Mock 翻译都挂在同一条链路上。
  */
 public interface TranslationProvider {
 

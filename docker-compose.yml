@@ -1,21 +1,34 @@
 services:
   backend:
-    build:
-      context: ./backend
+    build: ./backend
+    container_name: moyu-flowsub-backend
     ports:
       - "8080:8080"
     environment:
-      QINIU_ACCESS_KEY: ${QINIU_ACCESS_KEY:-}
-      QINIU_SECRET_KEY: ${QINIU_SECRET_KEY:-}
-      QINIU_BUCKET: ${QINIU_BUCKET:-}
-      QINIU_DOMAIN: ${QINIU_DOMAIN:-}
+      - QWEN_ENABLED=${QWEN_ENABLED:-false}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - QWEN_ASR_MODEL=${QWEN_ASR_MODEL:-qwen3-asr-flash-realtime}
+      - QWEN_TRANSLATION_MODEL=${QWEN_TRANSLATION_MODEL:-qwen-plus}
+      - QWEN_SUMMARY_MODEL=${QWEN_SUMMARY_MODEL:-qwen-plus}
+      - QWEN_BASE_URL=${QWEN_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      - QWEN_TIMEOUT_MS=${QWEN_TIMEOUT_MS:-12000}
+      - QWEN_TEMPERATURE=${QWEN_TEMPERATURE:-0}
+      - QINIU_ACCESS_KEY=${QINIU_ACCESS_KEY:-}
+      - QINIU_SECRET_KEY=${QINIU_SECRET_KEY:-}
+      - QINIU_BUCKET=${QINIU_BUCKET:-}
+      - QINIU_DOMAIN=${QINIU_DOMAIN:-}
+      - QINIU_ARCHIVE_PREFIX=${QINIU_ARCHIVE_PREFIX:-moyu-flowsub}
+      - QINIU_PRIVATE_BUCKET=${QINIU_PRIVATE_BUCKET:-false}
+      - QINIU_DOWNLOAD_EXPIRE_SECONDS=${QINIU_DOWNLOAD_EXPIRE_SECONDS:-3600}
+      - ASR_MOCK_ENABLED=${ASR_MOCK_ENABLED:-true}
+      - AUDIO_CHUNK_DURATION_MS=${AUDIO_CHUNK_DURATION_MS:-300}
+    restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
+    build: ./frontend
+    container_name: moyu-flowsub-frontend
     ports:
       - "5173:80"
     depends_on:
       - backend
-
-# 后续接入持久化和缓存时，可以在这里增加 MySQL 与 Redis 服务。
+    restart: unless-stopped

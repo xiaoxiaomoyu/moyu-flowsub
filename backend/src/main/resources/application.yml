@@ -14,37 +14,19 @@ qiniu:
   archive-prefix: ${QINIU_ARCHIVE_PREFIX:moyu-flowsub}
   private-bucket: ${QINIU_PRIVATE_BUCKET:false}
   download-expire-seconds: ${QINIU_DOWNLOAD_EXPIRE_SECONDS:3600}
-  ai:
-    asr-enabled: ${QINIU_ASR_ENABLED:true}
-    api-key: ${QINIU_AI_API_KEY:}
-    asr-ws-url: ${QINIU_ASR_WS_URL:wss://api.qnaigc.com/v1/voice/asr}
-
 moyu:
   flowsub:
     mock-enabled: true
     asr:
       mock-enabled: ${ASR_MOCK_ENABLED:true}
-      funasr-enabled: ${FUNASR_ENABLED:false}
-      funasr-endpoint: ${FUNASR_ENDPOINT:}
-      funasr-ws-endpoint: ${FUNASR_WS_ENDPOINT:${FUNASR_ENDPOINT:}}
       chunk-duration-ms: ${AUDIO_CHUNK_DURATION_MS:300}
-    deepseek:
-      enabled: ${DEEPSEEK_ENABLED:false}
-      api-key: ${DEEPSEEK_API_KEY:}
-      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com/v1}
-      model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
-      timeout-ms: ${DEEPSEEK_TIMEOUT_MS:12000}
-      temperature: ${DEEPSEEK_TEMPERATURE:0}
-    media:
-      miku:
-        enabled: ${MIKU_ENABLED:false}
-        api-host: ${MIKU_API_HOST:https://mls.cn-east-1.qiniumiku.com}
-        region: ${MIKU_REGION:cn-east-1}
-        publish-domain: ${MIKU_PUBLISH_DOMAIN:}
-        play-domain: ${MIKU_PLAY_DOMAIN:}
-        whep-domain: ${MIKU_WHEP_DOMAIN:}
-        stream-prefix: ${MIKU_STREAM_PREFIX:moyu-flowsub}
-      ffmpeg:
-        ffmpeg-path: ${FFMPEG_PATH:ffmpeg}
-        ffprobe-path: ${FFPROBE_PATH:ffprobe}
-        mock-enabled: ${MEDIA_MOCK_ENABLED:true}
+
+qwen:
+  enabled: ${QWEN_ENABLED:false}
+  api-key: ${DASHSCOPE_API_KEY:}
+  asr-model: ${QWEN_ASR_MODEL:qwen3-asr-flash-realtime}
+  translation-model: ${QWEN_TRANSLATION_MODEL:qwen-plus}
+  summary-model: ${QWEN_SUMMARY_MODEL:qwen-plus}
+  base-url: ${QWEN_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+  timeout-ms: ${QWEN_TIMEOUT_MS:12000}
+  temperature: ${QWEN_TEMPERATURE:0}

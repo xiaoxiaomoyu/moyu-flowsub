@@ -5,10 +5,13 @@ import com.moyu.flowsub.asr.AsrResult;
 import com.moyu.flowsub.asr.AsrService;
 import com.moyu.flowsub.asr.AsrStreamSession;
 import com.moyu.flowsub.session.SessionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -19,8 +22,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class AudioStreamService {
 
+    private static final Logger log = LoggerFactory.getLogger(AudioStreamService.class);
     private static final int MAX_RECENT_CHUNKS = 24;
-    private static final int NO_RESULT_FALLBACK_CHUNKS = 20;
+    private static final int NO_RESULT_FALLBACK_CHUNKS = 40;
+    private static final int SILENT_FALLBACK_AFTER_FIRST_RESULT = 40;
+    private static final int MAX_TRANSIENT_ERRORS = 3;
+    private static final int REPLAY_CHUNKS_ON_SWITCH = 3;
 
     private final SessionService sessionService;
     private final AsrService asrService;
@@ -34,7 +41,7 @@ public class AudioStreamService {
     public AudioStreamStartedPayload start(String sessionId, AudioChunkMeta meta) {
         sessionService.markRunning(sessionId);
         AsrStreamSession asrSession = asrService.start(sessionId, meta);
-        streams.put(sessionId, new StreamState(asrSession));
+        streams.computeIfAbsent(sessionId, k -> new StreamState(asrSession));
         int sampleRate = meta == null || meta.sampleRate() <= 0 ? 16000 : meta.sampleRate();
         return new AudioStreamStartedPayload("麦克风", "pcm_s16le", sampleRate, 300);
     }
@@ -88,6 +95,7 @@ public class AudioStreamService {
         private int chunkCount;
         private int subtitleCount;
         private int chunksWithoutText;
+        private int transientErrorCount;
 
         private StreamState(AsrStreamSession asrSession) {
             this.asrSession = asrSession;
@@ -96,24 +104,38 @@ public class AudioStreamService {
         private synchronized void remember(AudioChunk chunk) {
             chunkCount++;
             recentChunks.addLast(chunk);
-            // 只保留最近少量音频块，避免真实采集时内存缓存无界增长。
             while (recentChunks.size() > MAX_RECENT_CHUNKS) {
                 recentChunks.removeFirst();
             }
+        }
+
+        private synchronized List<AudioChunk> recentChunksForReplay() {
+            List<AudioChunk> list = new ArrayList<>(recentChunks);
+            int fromIndex = Math.max(0, list.size() - REPLAY_CHUNKS_ON_SWITCH);
+            return list.subList(fromIndex, list.size());
         }
     }
 
     private List<AsrResult> acceptWithFallback(String sessionId, AudioChunkMeta meta, StreamState state, AudioChunk chunk) {
         try {
             List<AsrResult> results = state.asrSession.accept(chunk);
+            state.transientErrorCount = 0;
             if (!results.isEmpty()) {
                 state.chunksWithoutText = 0;
                 return results;
             }
             return fallbackIfProviderSilent(sessionId, meta, state, chunk);
-        } catch (Exception ignored) {
-            // 真实 ASR 长连接可能在演示中途断开，立即重选 Provider，保证页面仍能继续出字幕。
-            switchProvider(sessionId, meta, state, "当前 ASR 长连接处理音频失败，已自动降级。");
+        } catch (Exception e) {
+            state.transientErrorCount++;
+            String provider = state.asrSession.status().provider();
+            if (state.transientErrorCount < MAX_TRANSIENT_ERRORS) {
+                log.warn("{} 处理音频块失败（第{}次临时错误），继续重试，sessionId={}",
+                        provider, state.transientErrorCount, sessionId);
+                return List.of();
+            }
+            log.warn("{} 连续失败{}次，触发降级，sessionId={}", provider, MAX_TRANSIENT_ERRORS, sessionId);
+            switchProvider(sessionId, meta, state,
+                    provider + " 连续" + MAX_TRANSIENT_ERRORS + "次处理音频块失败，已自动降级。");
             return state.asrSession.accept(chunk);
         }
     }
@@ -126,8 +148,13 @@ public class AudioStreamService {
         if ("MOCK".equals(status.endpointType()) || "NONE".equals(status.endpointType())) {
             return List.of();
         }
+        // WebSocket 尚未连接成功时，空块属于正常建立阶段，不计入静默降级计数。
+        if (!status.connected()) {
+            return List.of();
+        }
         state.chunksWithoutText++;
-        if (state.chunksWithoutText < NO_RESULT_FALLBACK_CHUNKS) {
+        int threshold = state.subtitleCount > 0 ? SILENT_FALLBACK_AFTER_FIRST_RESULT : NO_RESULT_FALLBACK_CHUNKS;
+        if (state.chunksWithoutText < threshold) {
             return List.of();
         }
 
@@ -142,7 +169,22 @@ public class AudioStreamService {
         state.excludedProviders.add(currentStatus.provider());
         state.asrSession.close();
         state.chunksWithoutText = 0;
-        // 降级后保留原始失败原因，前端可以看到为什么没有继续使用七牛云或 FunASR。
+        state.transientErrorCount = 0;
         state.asrSession = asrService.startExcluding(sessionId, meta, Set.copyOf(state.excludedProviders), reason);
+        replayRecentChunks(state);
+    }
+
+    private void replayRecentChunks(StreamState state) {
+        List<AudioChunk> chunks = state.recentChunksForReplay();
+        if (chunks.isEmpty()) {
+            return;
+        }
+        log.info("向新 Provider 回放最近 {} 个音频块", chunks.size());
+        for (AudioChunk chunk : chunks) {
+            try {
+                state.asrSession.accept(chunk);
+            } catch (Exception ignored) {
+            }
+        }
     }
 }

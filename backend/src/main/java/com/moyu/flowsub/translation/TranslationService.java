@@ -3,6 +3,8 @@ package com.moyu.flowsub.translation;
 import com.moyu.flowsub.asr.AsrResult;
 import com.moyu.flowsub.subtitle.SubtitleCorrectionPayload;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -17,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class TranslationService {
 
+    private static final Logger log = LoggerFactory.getLogger(TranslationService.class);
     private static final int MAX_CONTEXT_SIZE = 3;
     private static final int MAX_CORRECTION_SIZE = 2;
 
@@ -37,7 +40,7 @@ public class TranslationService {
             }
         }
         return new TranslationProviderStatusPayload("未启用", false, true,
-                "没有可用的翻译 Provider。", "请配置 DeepSeek 或保留 Mock 翻译。");
+                "没有可用的翻译 Provider。", "请配置 Qwen 或保留 Mock 翻译。");
     }
 
     public TranslationProcessResult translateFinal(String sessionId, AsrResult asrResult) {
@@ -70,8 +73,8 @@ public class TranslationService {
                 subtitle,
                 List.of(),
                 new TranslationProviderStatusPayload(result.providerName(), true, result.fallback(),
-                        result.fallback() ? "翻译已降级到 " + result.providerName() : "DeepSeek 流式翻译完成。",
-                        result.fallback() ? "DeepSeek 未配置或调用失败。" : "真实翻译链路正常。"),
+                        result.fallback() ? "翻译已降级到 " + result.providerName() : "Qwen 流式翻译完成。",
+                        result.fallback() ? "Qwen 未配置或调用失败。" : "真实翻译链路正常。"),
                 result.latencyMs(),
                 state.correctionCount
         );
@@ -111,6 +114,7 @@ public class TranslationService {
             try {
                 return provider.translate(request);
             } catch (Exception e) {
+                log.warn("{} 翻译失败：{}", status.provider(), e.getMessage());
                 appendReason(reasons, status.provider(), e.getMessage());
             }
         }

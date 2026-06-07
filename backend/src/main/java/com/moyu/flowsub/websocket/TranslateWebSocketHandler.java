@@ -123,6 +123,11 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
         String sessionId = extractSessionId(session);
         byte[] data = new byte[message.getPayloadLength()];
         message.getPayload().get(data);
+        // 诊断：打印音频块到达情况，确认麦克风采集链路是否正常
+        if (meta.chunkIndex() % 10 == 1) {
+            log.info("收到音频块 chunkIndex={}, size={}字节, sampleRate={}, level={}",
+                    meta.chunkIndex(), data.length, meta.sampleRate(), String.format("%.4f", meta.level()));
+        }
         archiveService.appendAudio(sessionId, data);
         AudioStreamProcessResult result = audioStreamService.accept(sessionId, meta, data);
 
@@ -135,25 +140,27 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         for (AsrResult asrResult : result.asrResults()) {
-            if ("FINAL".equals(asrResult.status())) {
-                startTranslation(session, sessionId, asrResult, result);
-                continue;
-            }
-            SubtitlePayload payload = new SubtitlePayload(
+            // 先发 ASR 识别结果到前端，不阻塞等待翻译，让用户即时看到识别到的原文。
+            SubtitlePayload asrPayload = new SubtitlePayload(
                     asrResult.segmentId(),
                     asrResult.text(),
-                    "等待稳定识别后生成中文翻译",
+                    "FINAL".equals(asrResult.status()) ? "翻译中..." : "等待稳定识别...",
                     asrResult.status(),
                     1,
                     false,
                     asrResult.latencyMs()
             );
-            archiveService.recordSubtitle(sessionId, payload);
-            sendQuietly(session, WsMessage.of("ASR_PARTIAL", sessionId, payload));
+            String asrEventType = "FINAL".equals(asrResult.status()) ? "ASR_FINAL" : "ASR_PARTIAL";
+            archiveService.recordSubtitle(sessionId, asrPayload);
+            sendQuietly(session, WsMessage.of(asrEventType, sessionId, asrPayload));
             sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
                     recordMetrics(sessionId, new MetricsPayload(asrResult.latencyMs(), 0, asrResult.latencyMs(),
                             result.subtitleCount(), 0, result.chunkCount(),
                             result.providerStatus().provider(), result.providerStatus().fallback()))));
+
+            if ("FINAL".equals(asrResult.status())) {
+                startTranslation(session, sessionId, asrResult, result);
+            }
         }
     }
 

@@ -1,10 +1,11 @@
 package com.moyu.flowsub.config;
 
 import com.moyu.flowsub.websocket.TranslateWebSocketHandler;
-import jakarta.websocket.server.ServerContainer;
 import org.springframework.boot.web.servlet.ServletContextInitializer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
@@ -21,20 +22,20 @@ public class TranslateWebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // 第一阶段使用原生 WebSocket，路径中的 sessionId 用来绑定当前同传会话。
         registry.addHandler(translateWebSocketHandler, "/ws/translate/{sessionId}")
                 .setAllowedOrigins("*");
     }
 
     @Bean
-    public ServletContextInitializer webSocketBufferCustomizer() {
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    public ServletContextInitializer tomcatWebSocketBufferCustomizer() {
+        // Tomcat WsSci 会在初始化时读取这两个 init 参数来设置 WebSocket 缓冲区大小。
+        // 300ms × 16kHz × 2 字节/sample ≈ 9.6KB，默认 8KB 缓冲会导致音频二进制帧被 Tomcat 拒绝。
         return servletContext -> {
-            Object container = servletContext.getAttribute(ServerContainer.class.getName());
-            if (container instanceof ServerContainer serverContainer) {
-                // 300ms 的 16k/16bit PCM 音频块约 9.6KB，默认 8KB 缓冲会导致连接被容器关闭。
-                serverContainer.setDefaultMaxBinaryMessageBufferSize(64 * 1024);
-                serverContainer.setDefaultMaxTextMessageBufferSize(64 * 1024);
-            }
+            servletContext.setInitParameter(
+                    "org.apache.tomcat.websocket.binaryBufferSize", "65536");
+            servletContext.setInitParameter(
+                    "org.apache.tomcat.websocket.textBufferSize", "65536");
         };
     }
 }
