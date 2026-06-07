@@ -59,7 +59,7 @@ class SummaryServiceTests {
 
             SummaryResult result = provider.summarize(new SummaryRequest(snapshot()));
 
-            assertThat(result.providerName()).isEqualTo("DeepSeek-V4-Pro");
+            assertThat(result.providerName()).isEqualTo("DeepSeek-V4-Flash");
             assertThat(result.fallback()).isFalse();
             assertThat(result.abstractText()).contains("实时字幕系统");
             assertThat(result.timeline()).hasSize(1);

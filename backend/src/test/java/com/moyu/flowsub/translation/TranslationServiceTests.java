@@ -54,7 +54,7 @@ class TranslationServiceTests {
 
             assertThat(result.translatedText()).isEqualTo("上下文窗口会帮助系统修正术语。");
             assertThat(result.corrections()).isEmpty();
-            assertThat(result.providerName()).isEqualTo("DeepSeek-V4-Pro");
+            assertThat(result.providerName()).isEqualTo("DeepSeek-V4-Flash");
         } finally {
             server.stop(0);
         }

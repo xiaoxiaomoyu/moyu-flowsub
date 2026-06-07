@@ -45,7 +45,7 @@ public class DeepSeekTranslationProvider implements TranslationProvider {
 
     @Override
     public String name() {
-        return "DeepSeek-V4-Pro";
+        return "DeepSeek-V4-Flash";
     }
 
     @Override

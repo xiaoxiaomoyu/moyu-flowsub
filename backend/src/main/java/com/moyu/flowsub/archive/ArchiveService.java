@@ -100,6 +100,19 @@ public class ArchiveService {
         }
     }
 
+    /**
+     * 从 Kodo 归档快照恢复会话归档。仅由 KodoArchiveLoader 调用。
+     */
+    public void loadFromKodo(String sessionId, ArchiveSnapshot snapshot) {
+        if (archives.containsKey(sessionId)) {
+            return;
+        }
+        Map<ArchiveResourceType, ArchiveResourceResponse> resourceMap = buildKodoResourceMap(sessionId);
+        ArchiveState state = new ArchiveState();
+        state.loadFromKodo(snapshot, resourceMap);
+        archives.put(sessionId, state);
+    }
+
     public ArchiveStatusResponse getArchive(String sessionId) {
         ArchiveState state = state(sessionId);
         synchronized (state) {
@@ -153,6 +166,47 @@ public class ArchiveService {
 
     private ArchiveState state(String sessionId) {
         return archives.computeIfAbsent(sessionId, ignored -> new ArchiveState());
+    }
+
+    private String filenameForType(ArchiveResourceType type) {
+        return switch (type) {
+            case METADATA -> "metadata.json";
+            case SUBTITLES -> "subtitles.json";
+            case CORRECTIONS -> "corrections.json";
+            case METRICS -> "metrics.json";
+            case SUMMARY -> "summary.md";
+            case INSIGHTS -> "insights.json";
+            case AUDIO -> "audio.pcm";
+            case AUDIO_WAV -> "audio.wav";
+            case SUBTITLES_VTT -> "subtitles.vtt";
+            case PLAYBACK_MANIFEST -> "playback-manifest.json";
+        };
+    }
+
+    private String contentTypeForType(ArchiveResourceType type) {
+        return switch (type) {
+            case METADATA, SUBTITLES, CORRECTIONS, METRICS, INSIGHTS, PLAYBACK_MANIFEST ->
+                    "application/json; charset=utf-8";
+            case SUMMARY -> "text/markdown; charset=utf-8";
+            case AUDIO -> "application/octet-stream";
+            case AUDIO_WAV -> "audio/wav";
+            case SUBTITLES_VTT -> "text/vtt; charset=utf-8";
+        };
+    }
+
+    private Map<ArchiveResourceType, ArchiveResourceResponse> buildKodoResourceMap(String sessionId) {
+        Map<ArchiveResourceType, ArchiveResourceResponse> map = new LinkedHashMap<>();
+        for (ArchiveResourceType type : ArchiveResourceType.values()) {
+            String filename = filenameForType(type);
+            if (filename == null) {
+                continue;
+            }
+            String key = resourceKey(sessionId, filename);
+            String url = qiniuService.downloadUrl(key);
+            map.put(type, new ArchiveResourceResponse(type, key, url,
+                    contentTypeForType(type), 0, Instant.now()));
+        }
+        return map;
     }
 
     private Map<ArchiveResourceType, ResourceContent> resourceContents(String sessionId,
@@ -329,6 +383,21 @@ public class ArchiveService {
 
         private synchronized byte[] audioBytes() {
             return audio.toByteArray();
+        }
+
+        private void loadFromKodo(ArchiveSnapshot snapshot,
+                                  Map<ArchiveResourceType, ArchiveResourceResponse> resources) {
+            for (SubtitlePayload sub : snapshot.subtitles()) {
+                this.subtitles.put(sub.segmentId(), sub);
+            }
+            this.corrections.addAll(snapshot.corrections());
+            this.metrics = snapshot.metrics();
+            this.resources = List.copyOf(resources.values());
+            this.status = ArchiveStatus.UPLOADED;
+            this.message = "云端归档已恢复，资源可通过 Kodo 回放。";
+            this.summaryMarkdown = "";
+            this.summary = SummaryResult.empty("归档总结文件可从 Kodo 获取。");
+            this.updatedAt = snapshot.archivedAt() != null ? snapshot.archivedAt() : Instant.now();
         }
 
         private synchronized ArchiveSnapshot snapshot(FlowSession session) {

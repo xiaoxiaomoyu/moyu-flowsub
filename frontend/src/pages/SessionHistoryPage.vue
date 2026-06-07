@@ -63,7 +63,7 @@ onMounted(refreshAll)
     <header class="topbar">
       <div>
         <h1>历史会话</h1>
-        <p>当前阶段使用内存存储，重启后历史数据会清空。</p>
+        <p>会话归档已持久化到七牛云 Kodo，重启后自动恢复。</p>
       </div>
       <nav class="topnav">
         <RouterLink to="/">返回实时同传</RouterLink>

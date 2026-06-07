@@ -36,7 +36,7 @@ public class DeepSeekSummaryProvider implements SummaryProvider {
 
     @Override
     public String name() {
-        return "DeepSeek-V4-Pro";
+        return "DeepSeek-V4-Flash";
     }
 
     @Override
