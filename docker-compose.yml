@@ -8,7 +8,8 @@ services:
       - QWEN_ENABLED=${QWEN_ENABLED:-false}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - QWEN_ASR_MODEL=${QWEN_ASR_MODEL:-qwen3-asr-flash-realtime}
-      - QWEN_TRANSLATION_MODEL=${QWEN_TRANSLATION_MODEL:-qwen-plus}
+      - QWEN_TRANSLATION_MODEL=${QWEN_TRANSLATION_MODEL:-qwen-turbo}
+      - QWEN_CORRECTION_MODEL=${QWEN_CORRECTION_MODEL:-qwen-plus}
       - QWEN_SUMMARY_MODEL=${QWEN_SUMMARY_MODEL:-qwen-plus}
       - QWEN_BASE_URL=${QWEN_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
       - QWEN_TIMEOUT_MS=${QWEN_TIMEOUT_MS:-12000}

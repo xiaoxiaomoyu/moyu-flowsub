@@ -6,10 +6,10 @@
 
 - 浏览器麦克风/系统音频采集，AudioWorklet PCM 切片
 - Qwen ASR Realtime 语音识别
-- Qwen/DashScope 实时翻译与上下文修正
+- Qwen/DashScope 实时翻译（SSE 流式逐 token 推送）与上下文修正
 - Qwen/DashScope 会后总结（摘要、时间线、术语表、重点句）
 - 七牛云 Kodo 会话归档（10 种资源），未配置时本地保底
-- 双语字幕实时展示、延迟指标、Provider 降级状态
+- 双语字幕实时展示、延迟指标、浮窗字幕同步
 - 会话回放（音频 + 字幕同步高亮）
 - 浮窗字幕（独立窗口，跨窗口同步）
 - Docker 一键部署
@@ -64,7 +64,8 @@ npm run dev
 | `QWEN_ENABLED` | 启用 Qwen ASR / 翻译 / 总结 | `true` |
 | `DASHSCOPE_API_KEY` | 阿里云百炼 DashScope API Key | — |
 | `QWEN_ASR_MODEL` | Qwen ASR 实时识别模型 | `qwen3-asr-flash-realtime` |
-| `QWEN_TRANSLATION_MODEL` | Qwen 翻译模型 | `qwen-plus` |
+| `QWEN_TRANSLATION_MODEL` | Qwen 翻译模型 | `qwen-turbo` |
+| `QWEN_CORRECTION_MODEL` | Qwen 上下文修正模型 | `qwen-plus` |
 | `QWEN_SUMMARY_MODEL` | Qwen 总结模型 | `qwen-plus` |
 | `QWEN_BASE_URL` | DashScope 接口地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `QWEN_TIMEOUT_MS` | API 调用超时（毫秒）| `12000` |
@@ -84,12 +85,12 @@ npm run dev
 
 ```
 浏览器麦克风/系统音频
-  → AudioWorklet (PCM 切片)
+  → AudioWorklet (PCM 切片, 16kHz)
   → WebSocket Binary Frame
   → AudioStreamService
   → AsrService (Qwen ASR)
-  → TranslationService (Qwen 翻译)
-  → WebSocket Text Frame
+  → TranslationService (Qwen 翻译, SSE 流式)
+  → WebSocket Text Frame (逐 token 推送)
   → Pinia Store → Vue 组件渲染
 ```
 
@@ -173,7 +174,7 @@ npm run dev
 5. 配置 Qwen 后，ASR 推送真实英文识别字幕
 6. Qwen 未配置时，显示"未启用"状态提示
 7. 配置 Qwen 后，ASR FINAL 稳定字幕生成中文译文
-8. 延迟指标实时更新，显示 Provider 名称和降级状态
+8. 延迟指标实时更新，显示 ASR/翻译 Provider 名称与模型
 9. 上下文修正出现时，字幕标记"已修正"
 10. 结束会话，状态变为 `FINISHED`，自动触发归档
 11. 未配置 Kodo 时显示本地归档，配置后上传至七牛云
