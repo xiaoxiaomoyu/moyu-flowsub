@@ -1,7 +1,7 @@
 package com.moyu.flowsub.qiniu;
 
 /**
- * 七牛云能力适配入口，后续真实 Kodo 上传实现会替换当前 Mock 实现。
+ * 七牛云 Kodo 对象存储服务入口。
  */
 public interface QiniuService {
     QiniuStatusResponse status();

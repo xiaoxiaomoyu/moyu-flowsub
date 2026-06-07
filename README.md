@@ -5,7 +5,7 @@
 ## 功能概览
 
 - 浏览器麦克风/系统音频采集，AudioWorklet PCM 切片
-- Qwen ASR Realtime 语音识别，Mock ASR 自动降级
+- Qwen ASR Realtime 语音识别
 - Qwen/DashScope 实时翻译与上下文修正
 - Qwen/DashScope 会后总结（摘要、时间线、术语表、重点句）
 - 七牛云 Kodo 会话归档（10 种资源），未配置时本地保底
@@ -20,8 +20,8 @@
 | --- | --- |
 | 后端 | Java 17、Spring Boot 3.5、Spring WebSocket、Lombok、Maven |
 | 前端 | Vue 3、Vite 7、TypeScript、Element Plus、Pinia、Vue Router |
-| ASR | Qwen ASR Realtime 优先，Mock ASR 保底 |
-| 翻译/总结 | Qwen/DashScope Chat API 优先，Mock 保底 |
+| ASR | Qwen ASR Realtime |
+| 翻译/总结 | Qwen/DashScope Chat API |
 | 存储 | 内存（运行时）+ 七牛云 Kodo（归档）|
 
 ## 快速开始
@@ -69,7 +69,6 @@ npm run dev
 | `QWEN_BASE_URL` | DashScope 接口地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | `QWEN_TIMEOUT_MS` | API 调用超时（毫秒）| `12000` |
 | `QWEN_TEMPERATURE` | 翻译温度参数 | `0` |
-| `ASR_MOCK_ENABLED` | Mock ASR 保底 | `true` |
 | `AUDIO_CHUNK_DURATION_MS` | 音频切片间隔（毫秒）| `300` |
 | `QINIU_ACCESS_KEY` | 七牛云 AK | — |
 | `QINIU_SECRET_KEY` | 七牛云 SK | — |
@@ -88,8 +87,8 @@ npm run dev
   → AudioWorklet (PCM 切片)
   → WebSocket Binary Frame
   → AudioStreamService
-  → AsrService (Qwen ASR → Mock ASR 降级)
-  → TranslationService (Qwen 翻译 → Mock 翻译 降级)
+  → AsrService (Qwen ASR)
+  → TranslationService (Qwen 翻译)
   → WebSocket Text Frame
   → Pinia Store → Vue 组件渲染
 ```
@@ -140,9 +139,9 @@ npm run dev
 ```
 ├── backend/
 │   ├── src/main/java/com/moyu/flowsub/
-│   │   ├── asr/            # ASR Provider 链（Qwen + Mock）
-│   │   ├── translation/    # 翻译 Provider 链（Qwen + Mock）
-│   │   ├── summary/        # 总结 Provider 链（Qwen + Mock）
+│   │   ├── asr/            # ASR（Qwen Realtime）
+│   │   ├── translation/    # 翻译（Qwen Chat API）
+│   │   ├── summary/        # 总结（Qwen Chat API）
 │   │   ├── qwen/           # Qwen 通用配置
 │   │   ├── qiniu/          # 七牛云 Kodo 服务
 │   │   ├── archive/        # 会话归档打包与上传
@@ -172,7 +171,7 @@ npm run dev
 3. 创建会话，状态显示 `CREATED`
 4. 开始麦克风采集，电平、采样率、音频块计数更新
 5. 配置 Qwen 后，ASR 推送真实英文识别字幕
-6. Qwen 未配置时，Mock ASR 自动保底
+6. Qwen 未配置时，显示"未启用"状态提示
 7. 配置 Qwen 后，ASR FINAL 稳定字幕生成中文译文
 8. 延迟指标实时更新，显示 Provider 名称和降级状态
 9. 上下文修正出现时，字幕标记"已修正"

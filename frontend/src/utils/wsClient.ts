@@ -34,14 +34,6 @@ class WsClient {
     this.socket = null
   }
 
-  sendStartMockTranslate(topic: string) {
-    // 模拟同传作为兜底演示入口，真实主流程走麦克风采集。
-    this.send({
-      type: 'START_MOCK_TRANSLATE',
-      payload: { topic }
-    })
-  }
-
   sendStartAudioStream(sampleRate = 16000) {
     this.send({
       type: 'START_AUDIO_STREAM',

@@ -1,7 +1,7 @@
 package com.moyu.flowsub.asr;
 
 /**
- * Provider 当前不可用时抛出该异常，AsrService 会自动尝试下一个 Provider。
+ * ASR Provider 启动或处理失败时抛出。
  */
 public class AsrProviderUnavailableException extends RuntimeException {
 

@@ -64,7 +64,7 @@ public class QwenTranslationProvider implements TranslationProvider {
                 && StringUtils.hasText(properties.baseUrl());
         String message = configured
                 ? "Qwen 翻译已配置，将优先使用流式翻译生成中文译文。"
-                : "Qwen 未配置，自动降级到 Mock 翻译。";
+                : "Qwen 翻译未配置，请设置 QWEN_ENABLED=true 和 DASHSCOPE_API_KEY。";
         return new TranslationProviderStatusPayload(name(), configured, false, message, message);
     }
 

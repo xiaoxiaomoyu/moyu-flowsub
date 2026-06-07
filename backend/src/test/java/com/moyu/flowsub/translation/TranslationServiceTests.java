@@ -12,24 +12,20 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TranslationServiceTests {
 
     @Test
-    void shouldFallbackToMockTranslationWhenQwenUnavailable() {
+    void shouldThrowWhenQwenNotConfigured() {
         TranslationService translationService = new TranslationService(List.of(
-                new QwenTranslationProvider(new QwenProperties(false, "", "", "", "", "http://localhost", 1000, 0), new ObjectMapper()),
-                new MockTranslationProvider()
+                new QwenTranslationProvider(new QwenProperties(false, "", "", "", "", "http://localhost", 1000, 0),
+                        new ObjectMapper())
         ));
 
-        TranslationProcessResult result = translationService.translateFinal("session_test",
-                new AsrResult("seg_asr_000001",
-                        "Today we will build a real time translation assistant for technical talks.",
-                        "FINAL", 120, 1, "Mock ASR"));
-
-        assertThat(result.subtitle().translatedText()).contains("实时翻译助手");
-        assertThat(result.providerStatus().provider()).isEqualTo("Mock 翻译");
-        assertThat(result.providerStatus().fallback()).isTrue();
+        assertThatThrownBy(() -> translationService.translateFinal("session_test",
+                new AsrResult("seg_001", "Hello world.", "FINAL", 100, 1, "Qwen ASR")))
+                .isInstanceOf(TranslationProviderUnavailableException.class);
     }
 
     @Test
@@ -47,7 +43,8 @@ class TranslationServiceTests {
                 """);
         try {
             QwenTranslationProvider provider = new QwenTranslationProvider(
-                    new QwenProperties(true, "test-key", "", "qwen-plus", "", "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
+                    new QwenProperties(true, "test-key", "", "qwen-plus", "",
+                            "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
                     new ObjectMapper()
             );
 
@@ -55,7 +52,8 @@ class TranslationServiceTests {
                     "session_test",
                     "seg_000002",
                     "The context window helps correct terms.",
-                    List.of(new TranslationContextItem("seg_000001", "We use rag to improve answers.", "我们使用破布来改进答案。", 1))
+                    List.of(new TranslationContextItem("seg_000001", "We use rag to improve answers.",
+                            "我们使用破布来改进答案。", 1))
             ));
 
             assertThat(result.translatedText()).isEqualTo("上下文窗口会帮助系统修正术语。");
@@ -67,7 +65,7 @@ class TranslationServiceTests {
     }
 
     @Test
-    void shouldGenerateCorrectionViaReviewMethod() throws Exception {
+    void shouldGenerateCorrectionViaReview() throws Exception {
         HttpServer server = startJsonServer("""
                 {
                   "choices": [
@@ -82,15 +80,15 @@ class TranslationServiceTests {
         try {
             TranslationService translationService = new TranslationService(List.of(
                     new QwenTranslationProvider(
-                            new QwenProperties(true, "test-key", "", "qwen-plus", "", "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
+                            new QwenProperties(true, "test-key", "", "qwen-plus", "",
+                                    "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
                             new ObjectMapper()
-                    ),
-                    new MockTranslationProvider()
+                    )
             ));
             translationService.translateFinal("session_test",
-                    new AsrResult("seg_000001", "We use rag.", "FINAL", 100, 1, "Mock ASR"));
+                    new AsrResult("seg_000001", "We use rag.", "FINAL", 100, 1, "Qwen ASR"));
             translationService.translateFinal("session_test",
-                    new AsrResult("seg_000002", "Later context fixes the previous subtitle.", "FINAL", 100, 2, "Mock ASR"));
+                    new AsrResult("seg_000002", "Later context fixes the previous subtitle.", "FINAL", 100, 2, "Qwen ASR"));
 
             var corrections = translationService.reviewCorrections("session_test");
 

@@ -22,14 +22,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class MockQiniuService implements QiniuService {
+public class QiniuKodoService implements QiniuService {
 
     private final QiniuProperties properties;
     private final UploadManager uploadManager;
     private final HttpClient httpClient;
     private volatile Auth cachedAuth;
 
-    public MockQiniuService(QiniuProperties properties) {
+    public QiniuKodoService(QiniuProperties properties) {
         this.properties = properties;
         this.uploadManager = new UploadManager(Configuration.create());
         this.httpClient = HttpClient.newBuilder()

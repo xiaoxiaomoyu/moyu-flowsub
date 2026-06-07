@@ -21,18 +21,6 @@ public record MetricsPayload(
                           int subtitleCount,
                           int correctionCount) {
         this(asrLatencyMs, translateLatencyMs, totalLatencyMs, subtitleCount, correctionCount,
-                0, "Mock ASR", true, "Mock 翻译", true);
-    }
-
-    public MetricsPayload(long asrLatencyMs,
-                          long translateLatencyMs,
-                          long totalLatencyMs,
-                          int subtitleCount,
-                          int correctionCount,
-                          int audioChunkCount,
-                          String providerName,
-                          boolean providerFallback) {
-        this(asrLatencyMs, translateLatencyMs, totalLatencyMs, subtitleCount, correctionCount,
-                audioChunkCount, providerName, providerFallback, "等待翻译", false);
+                0, "未启用", false, "未启用", false);
     }
 }

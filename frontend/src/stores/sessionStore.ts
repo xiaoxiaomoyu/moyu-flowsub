@@ -89,13 +89,6 @@ export const useSessionStore = defineStore('session', {
         }
       )
     },
-    startMockTranslate() {
-      if (!this.currentSession) {
-        return
-      }
-      wsClient.sendStartMockTranslate(this.currentSession.title)
-      this.lastEvent = 'START_MOCK_TRANSLATE'
-    },
     async startAudioCapture() {
       if (!this.currentSession || this.connectionStatus !== 'CONNECTED') {
         return
