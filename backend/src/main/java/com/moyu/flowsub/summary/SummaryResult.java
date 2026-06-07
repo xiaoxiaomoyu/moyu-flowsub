@@ -16,6 +16,6 @@ public record SummaryResult(
 ) {
     public static SummaryResult empty(String reason) {
         return new SummaryResult("本次会话暂无可总结的稳定字幕。", List.of(), List.of(), List.of(),
-                "Mock 总结", true, reason);
+                "未配置", false, reason);
     }
 }

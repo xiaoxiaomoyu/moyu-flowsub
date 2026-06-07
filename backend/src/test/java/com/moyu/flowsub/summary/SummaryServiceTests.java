@@ -22,19 +22,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SummaryServiceTests {
 
     @Test
-    void shouldFallbackToMockSummaryWhenQwenUnavailable() {
+    void shouldReturnEmptyWhenQwenUnavailable() {
         SummaryService summaryService = new SummaryService(List.of(
                 new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "http://localhost", 1000, 0),
-                        new ObjectMapper()),
-                new MockSummaryProvider()
+                        new ObjectMapper())
         ));
 
         SummaryResult result = summaryService.summarize(snapshot());
 
-        assertThat(result.providerName()).isEqualTo("Mock 总结");
-        assertThat(result.fallback()).isTrue();
-        assertThat(result.abstractText()).contains("归档测试会话");
-        assertThat(result.timeline()).isNotEmpty();
+        assertThat(result.providerName()).isEqualTo("未配置");
+        assertThat(result.fallback()).isFalse();
+        assertThat(result.reason()).contains("没有可用的");
     }
 
     @Test
@@ -52,7 +50,8 @@ class SummaryServiceTests {
                 """);
         try {
             QwenSummaryProvider provider = new QwenSummaryProvider(
-                    new QwenProperties(true, "test-key", "", "", "qwen-plus", "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
+                    new QwenProperties(true, "test-key", "", "", "qwen-plus",
+                            "http://127.0.0.1:" + server.getAddress().getPort(), 3000, 0),
                     new ObjectMapper()
             );
 
@@ -70,8 +69,11 @@ class SummaryServiceTests {
     }
 
     @Test
-    void shouldRenderMarkdownWithInsightsResource() {
-        SummaryService summaryService = new SummaryService(List.of(new MockSummaryProvider()));
+    void shouldRenderMarkdownWhenNoProviderAvailable() {
+        SummaryService summaryService = new SummaryService(List.of(
+                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "http://localhost", 1000, 0),
+                        new ObjectMapper())
+        ));
 
         SummaryResult result = summaryService.summarize(snapshot());
         String markdown = summaryService.toMarkdown(snapshot(), result, false);
@@ -79,7 +81,7 @@ class SummaryServiceTests {
         assertThat(markdown).contains("## 中文摘要");
         assertThat(markdown).contains("## 时间线");
         assertThat(markdown).contains("insights.json");
-        assertThat(markdown).contains("Mock 总结");
+        assertThat(markdown).contains("未配置");
     }
 
     private ArchiveSnapshot snapshot() {
@@ -110,7 +112,7 @@ class SummaryServiceTests {
         ));
         return new ArchiveSnapshot(session, subtitles.size(), corrections.size(), 128,
                 new MetricsPayload(120, 260, 380, subtitles.size(), corrections.size(), 4,
-                        "Mock ASR", true, "Mock 翻译", true),
+                        "Qwen ASR", false, "Qwen 翻译", false),
                 subtitles, corrections, Instant.now());
     }
 

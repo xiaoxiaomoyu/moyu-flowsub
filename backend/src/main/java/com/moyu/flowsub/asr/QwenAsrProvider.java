@@ -55,7 +55,7 @@ public class QwenAsrProvider implements AsrProvider {
         boolean configured = qwenProperties.enabled() && StringUtils.hasText(qwenProperties.apiKey());
         String message = configured
                 ? "Qwen 实时语音识别已配置，作为优先实时语音识别方案。"
-                : "Qwen 实时语音识别未配置，降级到 Mock ASR。";
+                : "Qwen 实时语音识别未配置，请设置 QWEN_ENABLED=true 和 DASHSCOPE_API_KEY。";
         return new AsrProviderStatusPayload(name(), configured, true, message,
                 false, configured ? "等待音频流启动后连接 Qwen ASR。" : message, "QWEN_ASR");
     }

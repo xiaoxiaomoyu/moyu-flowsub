@@ -16,9 +16,7 @@ qiniu:
   download-expire-seconds: ${QINIU_DOWNLOAD_EXPIRE_SECONDS:3600}
 moyu:
   flowsub:
-    mock-enabled: true
     asr:
-      mock-enabled: ${ASR_MOCK_ENABLED:true}
       chunk-duration-ms: ${AUDIO_CHUNK_DURATION_MS:300}
 
 qwen:

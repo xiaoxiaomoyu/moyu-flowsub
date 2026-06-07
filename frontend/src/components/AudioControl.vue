@@ -21,7 +21,6 @@ const connectionLabels: Record<string, string> = {
 
 const eventLabels: Record<string, string> = {
   SESSION_CONNECTED: '会话已连接',
-  START_MOCK_TRANSLATE: '已开始模拟同传',
   START_AUDIO_STREAM: '已开始音频采集',
   STOP_AUDIO_STREAM: '已停止音频采集',
   AUDIO_STREAM_STARTED: '音频流已启动',
@@ -137,13 +136,6 @@ function eventText(type: string) {
         停止采集 ({{ sessionStore.audioCapture.source === 'system' ? '系统音频' : '麦克风' }})
       </el-button>
       <el-button
-        :icon="VideoPlay"
-        :disabled="sessionStore.connectionStatus !== 'CONNECTED' || sessionStore.audioCapture.running"
-        @click="sessionStore.startMockTranslate"
-      >
-        模拟同传兜底
-      </el-button>
-      <el-button
         :icon="SwitchButton"
         :disabled="!sessionStore.currentSession"
         @click="sessionStore.finish"
@@ -217,7 +209,7 @@ function eventText(type: string) {
       title="创建会话后会自动建立 WebSocket 连接"
     >
       <template #default>
-        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 已接入 Qwen 翻译，未配置时自动降级到 Mock 翻译。</div>
+        <div class="alert-line"><el-icon><CircleCheck /></el-icon> 需要配置 Qwen DashScope API Key 后方可使用。</div>
       </template>
     </el-alert>
   </section>

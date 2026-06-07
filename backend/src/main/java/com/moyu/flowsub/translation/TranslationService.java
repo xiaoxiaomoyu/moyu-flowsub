@@ -39,8 +39,8 @@ public class TranslationService {
                 return status;
             }
         }
-        return new TranslationProviderStatusPayload("未启用", false, true,
-                "没有可用的翻译 Provider。", "请配置 Qwen 或保留 Mock 翻译。");
+        return new TranslationProviderStatusPayload("未启用", false, false,
+                "请配置 Qwen DashScope API Key。", "请将 DASHSCOPE_API_KEY 填入 .env 文件。");
     }
 
     public TranslationProcessResult translateFinal(String sessionId, AsrResult asrResult) {
@@ -52,7 +52,7 @@ public class TranslationService {
                 asrResult.text(),
                 context
         );
-        TranslationResult result = translateWithFallback(request);
+        TranslationResult result = translate(request);
         SubtitlePayload subtitle = new SubtitlePayload(
                 asrResult.segmentId(),
                 asrResult.text(),
@@ -62,7 +62,6 @@ public class TranslationService {
                 false,
                 asrResult.latencyMs() + result.latencyMs()
         );
-        // 翻译链路不再携带修正，修正由 reviewCorrections() 异步独立触发，避免阻塞实时字幕展示。
         state.remember(new TranslationContextItem(
                 asrResult.segmentId(),
                 asrResult.text(),
@@ -72,18 +71,13 @@ public class TranslationService {
         return new TranslationProcessResult(
                 subtitle,
                 List.of(),
-                new TranslationProviderStatusPayload(result.providerName(), true, result.fallback(),
-                        result.fallback() ? "翻译已降级到 " + result.providerName() : "Qwen 流式翻译完成。",
-                        result.fallback() ? "Qwen 未配置或调用失败。" : "真实翻译链路正常。"),
+                new TranslationProviderStatusPayload(result.providerName(), true, false,
+                        "Qwen 流式翻译完成。", "真实翻译链路正常。"),
                 result.latencyMs(),
                 state.correctionCount
         );
     }
 
-    /**
-     * 异步上下文修正，取当前会话上下文窗口内的字幕，调用修正 Provider 检查是否需要修正。
-     * 由 WebSocket 层在翻译完成后异步触发，不阻塞实时字幕展示。
-     */
     public List<SubtitleCorrectionPayload> reviewCorrections(String sessionId) {
         TranslationSessionState state = sessions.get(sessionId);
         if (state == null) {
@@ -93,7 +87,7 @@ public class TranslationService {
         if (context.size() < 2) {
             return List.of();
         }
-        List<TranslationCorrection> suggestions = reviewWithFallback(context);
+        List<TranslationCorrection> suggestions = review(context);
         List<SubtitleCorrectionPayload> payloads = state.applyCorrections(suggestions);
         state.correctionCount += payloads.size();
         return payloads;
@@ -103,25 +97,22 @@ public class TranslationService {
         sessions.remove(sessionId);
     }
 
-    private TranslationResult translateWithFallback(TranslationRequest request) {
-        StringBuilder reasons = new StringBuilder();
+    private TranslationResult translate(TranslationRequest request) {
         for (TranslationProvider provider : providers) {
             TranslationProviderStatusPayload status = provider.status();
             if (!status.available()) {
-                appendReason(reasons, status.provider(), status.reason());
                 continue;
             }
             try {
                 return provider.translate(request);
             } catch (Exception e) {
                 log.warn("{} 翻译失败：{}", status.provider(), e.getMessage());
-                appendReason(reasons, status.provider(), e.getMessage());
             }
         }
-        throw new TranslationProviderUnavailableException("没有可用的翻译 Provider：" + reasons);
+        throw new TranslationProviderUnavailableException("没有可用的翻译 Provider，请配置 Qwen DashScope API Key。");
     }
 
-    private List<TranslationCorrection> reviewWithFallback(List<TranslationContextItem> context) {
+    private List<TranslationCorrection> review(List<TranslationContextItem> context) {
         for (TranslationProvider provider : providers) {
             TranslationProviderStatusPayload status = provider.status();
             if (!status.available()) {
@@ -130,17 +121,9 @@ public class TranslationService {
             try {
                 return provider.review(context);
             } catch (Exception ignored) {
-                // 单个 Provider 修正失败时尝试下一个。
             }
         }
         return List.of();
-    }
-
-    private void appendReason(StringBuilder builder, String provider, String reason) {
-        if (!builder.isEmpty()) {
-            builder.append("；");
-        }
-        builder.append(provider).append("：").append(reason == null ? "不可用" : reason);
     }
 
     private static class TranslationSessionState {

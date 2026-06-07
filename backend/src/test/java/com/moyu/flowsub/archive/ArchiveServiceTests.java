@@ -10,7 +10,8 @@ import com.moyu.flowsub.session.CreateSessionRequest;
 import com.moyu.flowsub.session.SessionService;
 import com.moyu.flowsub.subtitle.SubtitleCorrectionPayload;
 import com.moyu.flowsub.subtitle.SubtitlePayload;
-import com.moyu.flowsub.summary.MockSummaryProvider;
+import com.moyu.flowsub.qwen.QwenProperties;
+import com.moyu.flowsub.summary.QwenSummaryProvider;
 import com.moyu.flowsub.summary.SummaryService;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +43,7 @@ class ArchiveServiceTests {
         assertThat(response.summaryMarkdown()).contains("字幕数：1");
         assertThat(response.summaryMarkdown()).contains("修正数：1");
         assertThat(response.summary()).isNotNull();
-        assertThat(response.summary().providerName()).isEqualTo("Mock 总结");
+        assertThat(response.summary().providerName()).isEqualTo("未配置");
         assertThat(response.resources()).hasSize(10);
         assertThat(response.resources())
                 .extracting(ArchiveResourceResponse::type)
@@ -153,7 +154,9 @@ class ArchiveServiceTests {
     }
 
     private SummaryService summaryService() {
-        return new SummaryService(List.of(new MockSummaryProvider()));
+        return new SummaryService(List.of(
+                new QwenSummaryProvider(new QwenProperties(false, "", "", "", "", "", 1000, 0), objectMapper())
+        ));
     }
 
     private static class FakeQiniuService implements QiniuService {

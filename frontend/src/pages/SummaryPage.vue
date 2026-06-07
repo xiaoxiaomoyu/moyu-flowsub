@@ -104,7 +104,7 @@ watch(sessionId, loadArchive)
 
     <section v-else-if="!archive" class="panel summary-placeholder">
       <h2>暂无归档记录</h2>
-      <p>使用 Mock ASR 跑完一轮会话并点击结束后，这里会展示本地或 Kodo 归档资源。</p>
+      <p>配置 Qwen 后创建会话并结束，这里会展示本地或 Kodo 归档资源。</p>
       <RouterLink to="/">
         <el-button type="primary">开始实时同传</el-button>
       </RouterLink>

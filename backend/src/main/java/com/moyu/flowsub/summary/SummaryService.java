@@ -19,20 +19,17 @@ public class SummaryService {
     }
 
     public SummaryResult summarize(ArchiveSnapshot snapshot) {
-        StringBuilder reasons = new StringBuilder();
-        SummaryRequest request = new SummaryRequest(snapshot);
         for (SummaryProvider provider : providers) {
             if (!provider.available()) {
-                appendReason(reasons, provider.name(), provider.unavailableReason());
                 continue;
             }
             try {
-                return provider.summarize(request);
+                return provider.summarize(new SummaryRequest(snapshot));
             } catch (Exception e) {
-                appendReason(reasons, provider.name(), e.getMessage());
+                // 调用失败则尝试下一个。
             }
         }
-        return SummaryResult.empty("没有可用的会后总结 Provider：" + reasons);
+        return SummaryResult.empty("没有可用的会后总结 Provider，请配置 Qwen DashScope API Key。");
     }
 
     public String toMarkdown(ArchiveSnapshot snapshot, SummaryResult summary, boolean uploadReady) {
@@ -104,12 +101,5 @@ public class SummaryService {
             builder.append("  原因：").append(sentence.reason()).append("\n");
         }
         builder.append('\n');
-    }
-
-    private void appendReason(StringBuilder builder, String provider, String reason) {
-        if (!builder.isEmpty()) {
-            builder.append("；");
-        }
-        builder.append(provider).append("：").append(reason == null ? "不可用" : reason);
     }
 }
