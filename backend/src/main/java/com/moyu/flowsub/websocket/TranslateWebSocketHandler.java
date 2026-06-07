@@ -45,11 +45,11 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
     private final ArchiveService archiveService;
     private final WebSocketMessageBus messageBus;
     private final ExecutorService executorService = Executors.newCachedThreadPool();
-    // 用 WebSocket 会话编号标记推送状态，避免用户重复点击“开始模拟同传”导致多条任务并发推送。
+    // 用 WebSocket 会话编号标记推送状态，避免用户重复点击"开始模拟同传"导致多条任务并发推送。
     private final Map<String, AtomicBoolean> runningSessions = new java.util.concurrent.ConcurrentHashMap<>();
     // 每个音频二进制帧到达前，前端会先发一条元数据文本消息，这里按 WebSocket 会话暂存。
     private final Map<String, AudioChunkMeta> pendingAudioMetas = new java.util.concurrent.ConcurrentHashMap<>();
-    // 每个会话的字幕计数，用于控制上下文修正触发频率（每 N 条字幕触发一次异步修正）。
+    // 每个会话的字幕计数，用于控制上下文修正触发频率（每 3 条字幕触发一次异步修正）。
     private final Map<String, Integer> sessionSubtitleCounts = new java.util.concurrent.ConcurrentHashMap<>();
 
     public TranslateWebSocketHandler(ObjectMapper objectMapper,
@@ -220,7 +220,7 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
                 sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId, subtitle));
 
                 if (i == 3) {
-                    // 第 4 条字幕后修正第 2 条字幕，模拟“后文到来后纠正历史结果”。
+                    // 第 4 条字幕后修正第 2 条字幕，模拟"后文到来后纠正历史结果"。
                     correctionCount = 1;
                     var correction = mockSubtitleProvider.correction();
                     archiveService.recordCorrection(sessionId, correction);
@@ -255,10 +255,6 @@ public class TranslateWebSocketHandler extends TextWebSocketHandler {
             sendQuietly(session, WsMessage.of("TRANSLATION_PROVIDER_STATUS", sessionId, translation.providerStatus()));
             archiveService.recordSubtitle(sessionId, translation.subtitle());
             sendQuietly(session, WsMessage.of("SUBTITLE_UPDATE", sessionId, translation.subtitle()));
-            for (var correction : translation.corrections()) {
-                archiveService.recordCorrection(sessionId, correction);
-                sendQuietly(session, WsMessage.of("SUBTITLE_CORRECTION", sessionId, correction));
-            }
             long totalLatency = asrResult.latencyMs() + translation.translateLatencyMs();
             sendQuietly(session, WsMessage.of("METRICS_UPDATE", sessionId,
                     recordMetrics(sessionId, new MetricsPayload(asrResult.latencyMs(), translation.translateLatencyMs(), totalLatency,
